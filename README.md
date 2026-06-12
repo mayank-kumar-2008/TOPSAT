@@ -41,7 +41,7 @@ Tile → RemoteCLIP embedding → Ripser H₁ persistence diagram
 |---|---|
 | ROC-AUC | 0.873 [0.832, 0.909] |
 | Cohen's d | 1.529 (large effect, p = 4.63e-31) |
-| OOD tiles detected | 148/150 (98.7%) |
+| OOD tiles detected | 122/150 |
 | Scheduler lift | 1.62× more novel tiles at fixed 12 MB budget |
 | Ripser H₁ latency | 7.4 ms / window |
 | RemoteCLIP latency (CPU) | 3,250 ms / tile — current bottleneck |
