@@ -1,0 +1,28 @@
+# TOPSAT — Topology-Guided Satellite Downlink Prioritisation
+# Python 3.9+  |  Tested on Google Colab (T4)
+
+# Install all deps:
+#   pip install -r requirements.txt
+#
+# For PyTorch with CUDA 11.8 (Colab):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#
+# NOTE: do NOT install giotto-tda — it downgrades numpy and breaks the environment.
+
+# --- Core ML / DL ---
+torch>=2.0.0
+torchvision>=0.15.0
+open_clip_torch>=2.20.0          # RemoteCLIP (ViT-L-14) weights loader
+
+# --- Topology / TDA ---
+ripser>=0.6.4                    # Fast persistent homology (C++ backend)
+persim>=0.3.3                    # Bottleneck / Wasserstein distance between diagrams
+
+# --- Data & Numerics ---
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+
+# --- Visualisation ---
+matplotlib>=3.7.0
+umap-learn>=0.5.5                # UMAP projection (TopoEncoder notebook)

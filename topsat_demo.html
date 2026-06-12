@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOPSAT — Mission Control Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #04080f;
+  --bg2:        #070d1a;
+  --bg3:        #0a1220;
+  --blue:       #378add;
+  --blue-b:     #4dabf7;
+  --blue-d:     #185fa5;
+  --blue-glow:  rgba(55,138,221,0.15);
+  --teal:       #1d9e75;
+  --teal-b:     #5dcaa5;
+  --red:        #d05858;
+  --red-dim:    rgba(163,45,45,0.12);
+  --amber:      #e8a23a;
+  --amber-dim:  rgba(232,162,58,0.12);
+  --text:       #c8dff0;
+  --text2:      #7a9bc0;
+  --text3:      #3d5a78;
+  --border:     rgba(55,138,221,0.18);
+  --border2:    rgba(255,255,255,0.06);
+  --font:       'Inter', sans-serif;
+  --mono:       'JetBrains Mono', monospace;
+}
+
+html, body {
+  width: 100%; min-height: 100vh;
+  background: var(--bg);
+  font-family: var(--font);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ── Stars ── */
+#stars {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+}
+.star {
+  position: absolute; border-radius: 50%; background: #fff;
+  animation: twinkle var(--d,3s) ease-in-out infinite var(--dl,0s);
+}
+@keyframes twinkle { 0%,100%{opacity:.05} 50%{opacity:.45} }
+
+/* ── Grid overlay ── */
+#grid-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(55,138,221,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(55,138,221,0.025) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ── Layout ── */
+#app {
+  position: relative; z-index: 1;
+  max-width: 1400px; margin: 0 auto;
+  padding: 0 24px 40px;
+}
+
+/* ── Top bar ── */
+#topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 0 14px;
+  border-bottom: 0.5px solid var(--border2);
+  margin-bottom: 20px;
+}
+.tb-logo {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  color: var(--blue-b); letter-spacing: 3px;
+}
+.tb-sub {
+  font-size: 10px; color: var(--text3); letter-spacing: 1.5px;
+  text-transform: uppercase; margin-top: 2px;
+}
+.tb-status {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; color: var(--teal-b);
+}
+.tb-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--teal-b);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+.tb-stat-row {
+  display: flex; gap: 20px;
+}
+.tb-stat { text-align: right; }
+.tb-stat-val { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--blue-b); }
+.tb-stat-lbl { font-size: 9px; color: var(--text3); letter-spacing: 1px; }
+
+/* ── Main 3-col grid ── */
+#main-grid {
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── Panel base ── */
+.panel {
+  background: rgba(255,255,255,0.02);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.panel-head {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--border2);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title {
+  font-size: 9px; letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--blue); font-weight: 500; font-family: var(--mono);
+}
+.panel-body { padding: 14px 16px; }
+
+/* ═══════════════════════════════
+   LEFT COLUMN — Archive Config
+═══════════════════════════════ */
+#col-left { display: flex; flex-direction: column; gap: 14px; }
+
+/* Archive class selector */
+.archive-class {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 8px; cursor: pointer;
+  border: 0.5px solid transparent;
+  transition: all .2s; user-select: none;
+}
+.archive-class:hover { background: rgba(255,255,255,0.03); }
+.archive-class.selected {
+  background: rgba(55,138,221,0.08);
+  border-color: rgba(55,138,221,0.35);
+}
+.ac-emoji { font-size: 18px; line-height: 1; }
+.ac-info { flex: 1; }
+.ac-name { font-size: 12px; font-weight: 500; color: var(--text); }
+.ac-sub { font-size: 10px; color: var(--text3); margin-top: 1px; font-family: var(--mono); }
+.ac-check {
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid var(--text3);
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s; flex-shrink: 0;
+}
+.archive-class.selected .ac-check {
+  background: var(--blue-d); border-color: var(--blue-b);
+}
+.ac-check::after {
+  content: '✓'; font-size: 10px; color: var(--blue-b);
+  opacity: 0; transition: opacity .15s;
+}
+.archive-class.selected .ac-check::after { opacity: 1; }
+
+/* OOD section */
+.ood-label {
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text3); font-family: var(--mono); margin: 6px 0 8px;
+}
+.ood-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px; margin: 3px;
+  border: 0.5px solid rgba(208,88,88,0.35);
+  background: rgba(208,88,88,0.06);
+  font-size: 11px; color: var(--text2);
+}
+.ood-emoji { font-size: 13px; }
+
+/* Run button */
+#run-btn {
+  width: 100%; padding: 12px;
+  background: var(--blue-d);
+  border: 0.5px solid rgba(55,138,221,0.5);
+  border-radius: 10px; color: var(--blue-b);
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase;
+  cursor: pointer; transition: all .2s;
+}
+#run-btn:hover:not(:disabled) {
+  background: rgba(55,138,221,0.25);
+  box-shadow: 0 0 20px rgba(55,138,221,0.3);
+}
+#run-btn:disabled { opacity: .4; cursor: default; }
+#run-btn.running {
+  background: var(--red-dim); border-color: rgba(208,88,88,0.4);
+  color: var(--red);
+}
+
+/* Pipeline stages */
+.pipe-stage {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 0; position: relative;
+}
+.pipe-stage:not(:last-child)::after {
+  content: '';
+  position: absolute; left: 15px; top: 34px;
+  width: 1px; height: calc(100% - 8px);
+  background: var(--border2);
+}
+.ps-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0; z-index: 1;
+  border: 0.5px solid var(--border2);
+  background: var(--bg3); transition: all .3s;
+}
+.ps-info { flex: 1; padding-top: 2px; }
+.ps-name { font-size: 11px; font-weight: 500; color: var(--text2); transition: color .3s; }
+.ps-sub { font-size: 9px; color: var(--text3); margin-top: 2px; font-family: var(--mono); }
+.ps-time { font-size: 9px; color: var(--text3); font-family: var(--mono); margin-top: 3px; }
+
+.pipe-stage.active .ps-icon {
+  background: rgba(55,138,221,0.15); border-color: var(--blue);
+  box-shadow: 0 0 12px rgba(55,138,221,0.3);
+  animation: icon-pulse .8s ease-in-out infinite alternate;
+}
+@keyframes icon-pulse {
+  from { box-shadow: 0 0 8px rgba(55,138,221,0.2); }
+  to   { box-shadow: 0 0 20px rgba(55,138,221,0.5); }
+}
+.pipe-stage.active .ps-name { color: var(--blue-b); }
+.pipe-stage.done .ps-icon { background: rgba(29,158,117,0.12); border-color: var(--teal); }
+.pipe-stage.done .ps-name { color: var(--teal-b); }
+
+/* ═══════════════════════════════
+   CENTER COLUMN — Tile Grid
+═══════════════════════════════ */
+#col-center { display: flex; flex-direction: column; gap: 14px; }
+
+/* Mode toggle */
+.mode-toggle {
+  display: flex; gap: 6px;
+}
+.mt-btn {
+  flex: 1; padding: 7px 0; border-radius: 7px; cursor: pointer;
+  font-size: 9px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+  font-family: var(--mono); border: 0.5px solid var(--border2);
+  background: transparent; color: var(--text3); transition: all .2s;
+}
+.mt-btn.active {
+  background: var(--blue-glow); border-color: rgba(55,138,221,0.4);
+  color: var(--blue-b);
+}
+
+/* Tile grid */
+#tile-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 7px;
+}
+
+.tile {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.02);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer; position: relative;
+  transition: transform .15s, border-color .3s, box-shadow .3s, background .3s;
+  overflow: visible;
+}
+.tile:hover { transform: scale(1.1); z-index: 10; }
+
+.tile-emoji { font-size: 16px; line-height: 1; }
+.tile-name {
+  font-size: 6px; color: var(--text3); font-family: var(--mono);
+  margin-top: 3px; text-align: center; padding: 0 3px; letter-spacing: .2px;
+}
+.tile-score {
+  font-size: 6px; font-family: var(--mono);
+  margin-top: 1px; text-align: center;
+}
+.tile-rank {
+  position: absolute; top: 3px; left: 4px;
+  font-size: 7px; font-family: var(--mono); color: var(--text3);
+  line-height: 1;
+}
+
+/* Tile states */
+.tile.t-idle { opacity: .5; }
+.tile.t-archive {
+  border-color: rgba(55,138,221,0.15);
+  background: rgba(55,138,221,0.04);
+}
+.tile.t-archive .tile-score { color: var(--text3); }
+
+.tile.t-novel {
+  border-color: rgba(208,88,88,0.55);
+  background: rgba(208,88,88,0.08);
+  box-shadow: 0 0 10px rgba(208,88,88,0.2);
+}
+.tile.t-novel .tile-score { color: #e07070; }
+
+.tile.t-sent-novel {
+  border-color: rgba(77,171,247,0.7);
+  background: rgba(55,138,221,0.12);
+  box-shadow: 0 0 12px rgba(77,171,247,0.3);
+}
+.tile.t-sent-novel .tile-score { color: var(--blue-b); }
+
+.tile.t-sent-archive {
+  border-color: rgba(93,202,165,0.35);
+  background: rgba(29,158,117,0.06);
+}
+.tile.t-sent-archive .tile-score { color: var(--teal-b); }
+
+.tile.t-skipped {
+  opacity: .28;
+  border-color: rgba(255,255,255,0.04);
+}
+
+.tile.t-queued {
+  border-color: rgba(77,171,247,0.5);
+  animation: tile-queue .5s ease-in-out infinite alternate;
+}
+@keyframes tile-queue {
+  from { box-shadow: 0 0 4px rgba(77,171,247,0.15); }
+  to   { box-shadow: 0 0 14px rgba(77,171,247,0.5); }
+}
+
+/* Sent checkmark */
+.tile.t-sent-novel::before, .tile.t-sent-archive::before {
+  content: '↑';
+  position: absolute; top: 2px; right: 4px;
+  font-size: 8px; color: var(--blue-b); font-family: var(--mono);
+}
+
+/* Tooltip */
+.tile-tip {
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  background: #0c1824; border: 0.5px solid var(--border);
+  border-radius: 8px; padding: 8px 12px;
+  white-space: nowrap; z-index: 100; pointer-events: none;
+  opacity: 0; transition: opacity .15s;
+  min-width: 140px;
+}
+.tile:hover .tile-tip { opacity: 1; }
+.tip-class { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.tip-score { font-size: 10px; font-family: var(--mono); color: var(--blue-b); }
+.tip-label { font-size: 9px; color: var(--text3); margin-top: 2px; }
+.tip-novel { color: var(--red); }
+.tip-archive { color: var(--teal-b); }
+
+/* Legend */
+.legend {
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+.leg-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 9px; color: var(--text3); letter-spacing: .5px;
+}
+.leg-dot {
+  width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+}
+
+/* ═══════════════════════════════
+   RIGHT COLUMN — Stats
+═══════════════════════════════ */
+#col-right { display: flex; flex-direction: column; gap: 14px; }
+
+/* Contact window */
+#cw-panel .panel-body { padding: 16px; }
+.cw-timer {
+  font-family: var(--mono); font-size: 38px; font-weight: 600;
+  color: var(--blue-b); letter-spacing: 3px; text-align: center;
+  text-shadow: 0 0 24px rgba(77,171,247,0.4);
+  transition: color .3s, text-shadow .3s;
+}
+.cw-timer.urgent { color: var(--red); text-shadow: 0 0 24px rgba(208,88,88,0.4); }
+.cw-sub { font-size: 9px; color: var(--text3); letter-spacing: 2px; text-align: center; margin-top: 4px; text-transform: uppercase; font-family: var(--mono); }
+.cw-track {
+  height: 4px; background: rgba(255,255,255,0.05);
+  border-radius: 2px; margin-top: 12px; overflow: hidden;
+}
+.cw-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--blue-d), var(--blue-b));
+  transition: width .5s linear;
+}
+.cw-fill.urgent { background: linear-gradient(90deg, #7a1a1a, var(--red)); }
+
+/* Dual BW bars */
+.bw-block { margin-bottom: 10px; }
+.bw-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 5px;
+}
+.bw-name { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; font-family: var(--mono); }
+.bw-name.rand { color: var(--text3); }
+.bw-name.topsat { color: var(--blue-b); }
+.bw-nums { font-size: 10px; font-family: var(--mono); }
+.bw-used { color: var(--blue-b); }
+.bw-total { color: var(--text3); }
+.bw-track {
+  height: 7px; background: rgba(255,255,255,0.05);
+  border-radius: 4px; overflow: hidden;
+}
+.bw-bar {
+  height: 100%; border-radius: 4px; transition: width .3s ease;
+}
+.bw-bar.rand { background: linear-gradient(90deg, #1e2e42, #3d5a78); }
+.bw-bar.topsat {
+  background: linear-gradient(90deg, var(--blue-d), var(--blue-b));
+  box-shadow: 0 0 6px rgba(77,171,247,0.4);
+}
+.bw-bar.topsat.full {
+  background: linear-gradient(90deg, var(--teal), var(--teal-b));
+  box-shadow: 0 0 8px rgba(93,202,165,0.4);
+}
+
+/* Novel count comparison */
+.novel-compare {
+  display: flex; gap: 10px; margin-top: 6px;
+}
+.nc-block {
+  flex: 1; background: rgba(255,255,255,0.02);
+  border: 0.5px solid var(--border2); border-radius: 10px;
+  padding: 10px 12px; text-align: center;
+}
+.nc-block.topsat-nc {
+  border-color: rgba(55,138,221,0.3);
+  background: rgba(55,138,221,0.05);
+}
+.nc-val {
+  font-family: var(--mono); font-size: 28px; font-weight: 600;
+  line-height: 1; transition: all .2s;
+}
+.nc-val.rand-v { color: var(--text3); }
+.nc-val.topsat-v { color: var(--blue-b); }
+.nc-label { font-size: 9px; color: var(--text3); letter-spacing: .8px; margin-top: 4px; text-transform: uppercase; }
+
+/* Lift callout */
+#lift-callout {
+  padding: 12px 14px;
+  background: rgba(55,138,221,0.06);
+  border: 0.5px solid rgba(55,138,221,0.3);
+  border-radius: 10px; text-align: center;
+  opacity: 0; transition: opacity .4s;
+}
+#lift-callout.visible { opacity: 1; }
+.lc-val {
+  font-family: var(--mono); font-size: 32px; font-weight: 600;
+  color: var(--blue-b); text-shadow: 0 0 20px rgba(77,171,247,0.5);
+}
+.lc-label { font-size: 10px; color: var(--text2); margin-top: 4px; letter-spacing: .5px; }
+
+/* Score distribution mini chart */
+#dist-canvas {
+  width: 100%; height: 80px; display: block;
+}
+
+/* Key metrics chips */
+.metric-chips {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.mc {
+  background: rgba(255,255,255,0.02);
+  border: 0.5px solid var(--border2);
+  border-radius: 9px; padding: 10px 12px; text-align: center;
+}
+.mc-val {
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  color: var(--blue-b);
+}
+.mc-label { font-size: 9px; color: var(--text3); letter-spacing: .8px; margin-top: 3px; }
+
+/* Phase log */
+#phase-log {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text2); line-height: 1.7;
+  min-height: 48px;
+}
+.log-line { opacity: 0; animation: log-in .3s ease forwards; }
+@keyframes log-in { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:none} }
+.log-line.done { color: var(--teal-b); }
+.log-line.active { color: var(--blue-b); }
+.log-line.warn { color: var(--amber); }
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  #main-grid { grid-template-columns: 220px 1fr 260px; }
+}
+@media (max-width: 900px) {
+  #main-grid { grid-template-columns: 1fr; }
+  #col-right { flex-direction: row; flex-wrap: wrap; }
+  #col-right .panel { flex: 1; min-width: 240px; }
+}
+</style>
+</head>
+<body>
+
+<div id="stars"></div>
+<div id="grid-bg"></div>
+
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div>
+      <div class="tb-logo">TOPSAT</div>
+      <div class="tb-sub">Topology-Guided Novelty Detection · Mission Control</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:24px">
+      <div class="tb-stat-row">
+        <div class="tb-stat">
+          <div class="tb-stat-val">0.873</div>
+          <div class="tb-stat-lbl">AUC</div>
+        </div>
+        <div class="tb-stat">
+          <div class="tb-stat-val">1.529</div>
+          <div class="tb-stat-lbl">Cohen's d</div>
+        </div>
+        <div class="tb-stat">
+          <div class="tb-stat-val">1.62×</div>
+          <div class="tb-stat-lbl">Scheduler lift</div>
+        </div>
+      </div>
+      <div class="tb-status">
+        <div class="tb-dot"></div>
+        <span id="sat-status">SENTINEL-2 · LEO ORBIT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div id="main-grid">
+
+    <!-- ══ LEFT: Archive Config + Pipeline ══ -->
+    <div id="col-left">
+
+      <!-- Archive selector -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Archive Classes</span>
+          <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">Known terrain</span>
+        </div>
+        <div class="panel-body" style="padding:10px 12px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+            Select which terrain classes the satellite <em style="color:var(--blue-b)">has already seen</em>. Everything else becomes OOD — novel by definition.
+          </div>
+
+          <div id="archive-list">
+            <!-- Populated by JS -->
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="ood-label">Detected as novel →</div>
+            <div id="ood-pills"></div>
+          </div>
+
+          <button id="run-btn" style="margin-top:14px">▶ &nbsp;Run Detection</button>
+        </div>
+      </div>
+
+      <!-- Pipeline stages -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Pipeline</span>
+        </div>
+        <div class="panel-body" style="padding:12px 14px" id="pipeline-stages">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ CENTER: Tile Grid ══ -->
+    <div id="col-center">
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Incoming Tile Stream — 36 tiles · 12 MB budget</span>
+          <div class="mode-toggle" id="mode-toggle">
+            <button class="mt-btn active" data-mode="topsat">TOPSAT</button>
+            <button class="mt-btn" data-mode="random">Random</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div id="tile-grid"></div>
+          <div style="margin-top:12px">
+            <div class="legend" id="legend">
+              <div class="leg-item"><div class="leg-dot" style="background:rgba(55,138,221,0.5)"></div>Archive (known)</div>
+              <div class="leg-item"><div class="leg-dot" style="background:rgba(208,88,88,0.6)"></div>Novel (OOD)</div>
+              <div class="leg-item"><div class="leg-dot" style="background:rgba(77,171,247,0.8)"></div>Transmitted ↑</div>
+              <div class="leg-item"><div class="leg-dot" style="background:rgba(255,255,255,0.1)"></div>Skipped</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase log panel -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">System Log</span>
+          <span style="font-size:9px;color:var(--text3);font-family:var(--mono)" id="log-time">—</span>
+        </div>
+        <div class="panel-body" id="phase-log">
+          <div style="color:var(--text3);font-family:var(--mono);font-size:10px">
+            Select archive classes and press Run Detection to begin.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ RIGHT: Stats ══ -->
+    <div id="col-right">
+
+      <!-- Contact window -->
+      <div class="panel" id="cw-panel">
+        <div class="panel-head">
+          <span class="panel-title">Contact Window</span>
+        </div>
+        <div class="panel-body">
+          <div class="cw-timer" id="cw-timer">10:00</div>
+          <div class="cw-sub">Remaining downlink time</div>
+          <div class="cw-track"><div class="cw-fill" id="cw-fill" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <!-- Bandwidth comparison -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Bandwidth Used</span>
+        </div>
+        <div class="panel-body">
+          <div class="bw-block">
+            <div class="bw-head">
+              <span class="bw-name rand">Random</span>
+              <span class="bw-nums">
+                <span class="bw-used" id="rand-bw-used">0.0</span>
+                <span class="bw-total"> / 12.0 MB</span>
+              </span>
+            </div>
+            <div class="bw-track"><div class="bw-bar rand" id="rand-bw-bar" style="width:0%"></div></div>
+          </div>
+          <div class="bw-block" style="margin-top:12px">
+            <div class="bw-head">
+              <span class="bw-name topsat">TOPSAT</span>
+              <span class="bw-nums">
+                <span class="bw-used" id="ts-bw-used">0.0</span>
+                <span class="bw-total"> / 12.0 MB</span>
+              </span>
+            </div>
+            <div class="bw-track"><div class="bw-bar topsat" id="ts-bw-bar" style="width:0%"></div></div>
+          </div>
+
+          <div class="novel-compare" style="margin-top:14px">
+            <div class="nc-block">
+              <div class="nc-val rand-v" id="rand-novel-ct">0</div>
+              <div class="nc-label">Random novel</div>
+            </div>
+            <div class="nc-block topsat-nc">
+              <div class="nc-val topsat-v" id="ts-novel-ct">0</div>
+              <div class="nc-label">TOPSAT novel</div>
+            </div>
+          </div>
+
+          <div id="lift-callout" style="margin-top:12px">
+            <div class="lc-val" id="lift-val">—</div>
+            <div class="lc-label">Scheduler lift over random</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Score distribution -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Novelty Score Distribution</span>
+        </div>
+        <div class="panel-body" style="padding:12px 14px">
+          <canvas id="dist-canvas"></canvas>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:9px;color:var(--text3);font-family:var(--mono)">
+            <span>← Low novelty (archive)</span>
+            <span>High novelty (OOD) →</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key metrics -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Evaluation Metrics</span>
+        </div>
+        <div class="panel-body">
+          <div class="metric-chips">
+            <div class="mc"><div class="mc-val">0.873</div><div class="mc-label">AUC [0.832, 0.909]</div></div>
+            <div class="mc"><div class="mc-val">1.529</div><div class="mc-label">Cohen's d</div></div>
+            <div class="mc"><div class="mc-val">+0.141</div><div class="mc-label">Topology gain</div></div>
+            <div class="mc"><div class="mc-val" style="font-size:11px">4.6e-31</div><div class="mc-label">p-value</div></div>
+          </div>
+          <div style="margin-top:12px;padding:10px 12px;background:rgba(55,138,221,0.05);border:0.5px solid rgba(55,138,221,0.2);border-radius:8px">
+            <div style="font-size:9px;color:var(--blue);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:4px">Topology baseline gap</div>
+            <div style="font-size:11px;color:var(--text2);line-height:1.6">
+              Cosine centroid baseline: <span style="color:var(--text3);font-family:var(--mono)">0.732</span><br>
+              TOPSAT + TDA: <span style="color:var(--blue-b);font-family:var(--mono)">0.873</span><br>
+              <span style="color:var(--blue-b);font-family:var(--mono)">+0.141</span> — topology doing real work.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   TOPSAT MISSION CONTROL — Interactive Demo
+   B + C: Dashboard + Archive Builder
+═══════════════════════════════════════════════════════════ */
+
+// ── Stars ──
+const starsCtn = document.getElementById('stars');
+for (let i = 0; i < 140; i++) {
+  const s = document.createElement('div');
+  s.className = 'star';
+  const sz = Math.random() * 1.8 + 0.3;
+  s.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*6}s;--dl:${Math.random()*6}s;opacity:0`;
+  starsCtn.appendChild(s);
+}
+
+// ── All EuroSAT classes ──
+const ALL_CLASSES = [
+  { id:'seaLake',            emoji:'🌊', label:'SeaLake',              archivable:true  },
+  { id:'forest',             emoji:'🌲', label:'Forest',               archivable:true  },
+  { id:'highway',            emoji:'🛣️', label:'Highway',              archivable:true  },
+  { id:'industrial',         emoji:'🏭', label:'Industrial',           archivable:true  },
+  { id:'annualCrop',         emoji:'🌾', label:'AnnualCrop',           archivable:true  },
+  { id:'river',              emoji:'🏞️', label:'River',               archivable:true  },
+  { id:'residential',        emoji:'🏘️', label:'Residential',         archivable:true  },
+  { id:'herbaceousVeg',      emoji:'🌿', label:'HerbaceousVeg',        archivable:true  },
+  { id:'pasture',            emoji:'🐄', label:'Pasture',              archivable:true  },
+  { id:'permanentCrop',      emoji:'🍇', label:'PermanentCrop',        archivable:true  },
+];
+
+// Default archive: SeaLake, Forest, Highway (matches the paper)
+let archiveSet = new Set(['seaLake','forest','highway']);
+
+// Pipeline stages with real timing data
+const STAGES = [
+  { id:'capture',   icon:'📡', name:'Tile Capture',       sub:'64×64 RGB patches · 36 tiles', time:'0ms' },
+  { id:'encode',    icon:'🧠', name:'RemoteCLIP Encode',  sub:'ViT-L-14 · 768-d · cosine',    time:'3,250ms/tile' },
+  { id:'ripser',    icon:'🔬', name:'Ripser H₁',          sub:'Persistent homology · window=80', time:'7.4ms' },
+  { id:'bottleneck',icon:'📊', name:'Bottleneck Score',   sub:'Distance to archive diagram',   time:'22ms' },
+  { id:'knapsack',  icon:'⚖️', name:'Knapsack Scheduler', sub:'12 MB budget · rank by novelty', time:'<1ms' },
+  { id:'downlink',  icon:'📶', name:'Downlink',           sub:'Novel-first transmission',       time:'—' },
+];
+
+// Tile pool: 36 tiles across all classes (weighted toward archive for realism)
+function buildTilePool() {
+  const pool = [];
+  let id = 0;
+  ALL_CLASSES.forEach(cls => {
+    // Archive classes get 4 tiles each; OOD get 2 each
+    const isArch = archiveSet.has(cls.id);
+    const count = isArch ? 4 : 2;
+    // Novelty scores: archive ~0.002–0.005, OOD ~0.007–0.012
+    for (let i = 0; i < count; i++) {
+      const base = isArch
+        ? 0.0018 + Math.random() * 0.0032
+        : 0.0070 + Math.random() * 0.0048;
+      pool.push({
+        id: id++,
+        cls: cls.id,
+        emoji: cls.emoji,
+        label: cls.label,
+        novel: !isArch,
+        score: parseFloat(base.toFixed(4)),
+      });
+    }
+  });
+  // Always exactly 36
+  while (pool.length < 36) {
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    pool.push({ ...t, id: id++, score: parseFloat((t.score + (Math.random()-.5)*0.001).toFixed(4)) });
+  }
+  return pool.slice(0, 36);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i=a.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// ── State ──
+let tiles = [];
+let topsatOrder = [];
+let randomOrder = [];
+let viewMode = 'topsat'; // 'topsat' | 'random'
+let simState = 'idle'; // 'idle' | 'running' | 'done'
+let simInterval = null;
+let cwInterval = null;
+let cwSecsLeft = 600;
+let stepIdx = 0;
+let randBW = 0, tsBW = 0;
+let randNovel = 0, tsNovel = 0;
+const BUDGET = 12.0;
+const TILE_MB = BUDGET / 36;
+
+// ── Build archive selector ──
+function buildArchiveSelector() {
+  const list = document.getElementById('archive-list');
+  list.innerHTML = '';
+  ALL_CLASSES.forEach(cls => {
+    const el = document.createElement('div');
+    el.className = 'archive-class' + (archiveSet.has(cls.id) ? ' selected' : '');
+    el.dataset.id = cls.id;
+    el.innerHTML = `
+      <span class="ac-emoji">${cls.emoji}</span>
+      <div class="ac-info">
+        <div class="ac-name">${cls.label}</div>
+        <div class="ac-sub">${archiveSet.has(cls.id) ? 'In archive' : 'Not archived'}</div>
+      </div>
+      <div class="ac-check"></div>
+    `;
+    el.addEventListener('click', () => {
+      if (simState === 'running') return;
+      if (archiveSet.has(cls.id)) {
+        if (archiveSet.size <= 1) return; // keep at least 1
+        archiveSet.delete(cls.id);
+      } else {
+        archiveSet.add(cls.id);
+      }
+      buildArchiveSelector();
+      buildOODPills();
+      rebuildTiles();
+    });
+    list.appendChild(el);
+  });
+}
+
+function buildOODPills() {
+  const pills = document.getElementById('ood-pills');
+  pills.innerHTML = '';
+  ALL_CLASSES.forEach(cls => {
+    if (!archiveSet.has(cls.id)) {
+      const p = document.createElement('span');
+      p.className = 'ood-pill';
+      p.innerHTML = `<span class="ood-emoji">${cls.emoji}</span>${cls.label}`;
+      pills.appendChild(p);
+    }
+  });
+}
+
+// ── Build pipeline stages ──
+function buildPipeline() {
+  const el = document.getElementById('pipeline-stages');
+  el.innerHTML = '';
+  STAGES.forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'pipe-stage';
+    d.id = `ps-${s.id}`;
+    d.innerHTML = `
+      <div class="ps-icon">${s.icon}</div>
+      <div class="ps-info">
+        <div class="ps-name">${s.name}</div>
+        <div class="ps-sub">${s.sub}</div>
+        <div class="ps-time">${s.time}</div>
+      </div>
+    `;
+    el.appendChild(d);
+  });
+}
+
+// ── Build tile grid ──
+function rebuildTiles() {
+  tiles = buildTilePool();
+  topsatOrder = [...tiles].sort((a,b) => b.score - a.score);
+  randomOrder = shuffle([...tiles]);
+  renderTileGrid();
+  resetStats();
+}
+
+function renderTileGrid() {
+  const grid = document.getElementById('tile-grid');
+  grid.innerHTML = '';
+
+  const order = viewMode === 'topsat' ? topsatOrder : randomOrder;
+  order.forEach((tile, rank) => {
+    const el = document.createElement('div');
+    el.className = 'tile t-idle';
+    el.id = `tile-${tile.id}`;
+    el.innerHTML = `
+      <div class="tile-rank">${rank+1}</div>
+      <div class="tile-emoji">${tile.emoji}</div>
+      <div class="tile-name">${tile.label}</div>
+      <div class="tile-score">${tile.score.toFixed(4)}</div>
+      <div class="tile-tip">
+        <div class="tip-class">${tile.emoji} ${tile.label}</div>
+        <div class="tip-score">Score: ${tile.score.toFixed(4)}</div>
+        <div class="tip-label ${tile.novel ? 'tip-novel' : 'tip-archive'}">
+          ${tile.novel ? '⚠ Novel — OOD terrain' : '✓ Archive class'}
+        </div>
+        <div class="tip-label" style="margin-top:2px">Rank #${rank+1} · ${(TILE_MB).toFixed(2)} MB</div>
+      </div>
+    `;
+    grid.appendChild(el);
+  });
+}
+
+// ── Stats reset ──
+function resetStats() {
+  randBW = 0; tsBW = 0;
+  randNovel = 0; tsNovel = 0;
+  cwSecsLeft = 600;
+
+  document.getElementById('rand-bw-used').textContent = '0.0';
+  document.getElementById('ts-bw-used').textContent = '0.0';
+  document.getElementById('rand-bw-bar').style.width = '0%';
+  document.getElementById('ts-bw-bar').style.width = '0%';
+  document.getElementById('ts-bw-bar').classList.remove('full');
+  document.getElementById('rand-novel-ct').textContent = '0';
+  document.getElementById('ts-novel-ct').textContent = '0';
+  document.getElementById('lift-callout').classList.remove('visible');
+  document.getElementById('lift-val').textContent = '—';
+  document.getElementById('cw-timer').textContent = '10:00';
+  document.getElementById('cw-timer').classList.remove('urgent');
+  document.getElementById('cw-fill').style.width = '100%';
+  document.getElementById('cw-fill').classList.remove('urgent');
+  document.getElementById('phase-log').innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:10px">Select archive classes and press Run Detection to begin.</div>';
+  document.getElementById('log-time').textContent = '—';
+  clearDistCanvas();
+
+  // Reset pipeline stages
+  STAGES.forEach(s => {
+    const el = document.getElementById(`ps-${s.id}`);
+    if (el) el.className = 'pipe-stage';
+  });
+}
+
+// ── Score distribution canvas ──
+function clearDistCanvas() {
+  const canvas = document.getElementById('dist-canvas');
+  canvas.width = canvas.offsetWidth || 268;
+  canvas.height = 80;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = 'rgba(61,90,120,0.5)';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.fillText('Run detection to see score distribution', 8, 44);
+}
+
+function drawDistribution() {
+  const canvas = document.getElementById('dist-canvas');
+  canvas.width = canvas.offsetWidth || 268;
+  canvas.height = 80;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  // Archive scores: ~0.002–0.005 (real from paper: centered ~0.004)
+  // OOD scores: ~0.007–0.012 (real from paper: centered ~0.010)
+  const archScores = tiles.filter(t=>!t.novel).map(t=>t.score);
+  const novelScores = tiles.filter(t=>t.novel).map(t=>t.score);
+
+  const allScores = [...tiles.map(t=>t.score)];
+  const minS = Math.min(...allScores);
+  const maxS = Math.max(...allScores);
+  const range = maxS - minS;
+
+  const BINS = 20;
+  const archBins  = new Array(BINS).fill(0);
+  const novelBins = new Array(BINS).fill(0);
+
+  archScores.forEach(s => {
+    const b = Math.min(BINS-1, Math.floor(((s-minS)/range)*BINS));
+    archBins[b]++;
+  });
+  novelScores.forEach(s => {
+    const b = Math.min(BINS-1, Math.floor(((s-minS)/range)*BINS));
+    novelBins[b]++;
+  });
+
+  const maxCount = Math.max(...archBins, ...novelBins, 1);
+  const bw = W / BINS;
+  const pad = 8;
+
+  // Draw threshold line (midpoint)
+  const threshX = W * ((0.0054 - minS) / range);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(threshX, 0); ctx.lineTo(threshX, H-pad); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Archive bars
+  archBins.forEach((cnt, i) => {
+    if (!cnt) return;
+    const h = ((cnt / maxCount) * (H - pad - 4));
+    const x = i * bw + 1;
+    ctx.fillStyle = 'rgba(55,138,221,0.5)';
+    ctx.fillRect(x, H-pad-h, bw-2, h);
+  });
+
+  // Novel bars
+  novelBins.forEach((cnt, i) => {
+    if (!cnt) return;
+    const h = ((cnt / maxCount) * (H - pad - 4));
+    const x = i * bw + 1;
+    ctx.fillStyle = 'rgba(208,88,88,0.6)';
+    ctx.fillRect(x, H-pad-h, bw-2, h);
+  });
+
+  // X axis
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.beginPath(); ctx.moveTo(0,H-pad); ctx.lineTo(W,H-pad); ctx.stroke();
+
+  // Threshold label
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = '8px JetBrains Mono, monospace';
+  ctx.fillText('τ', threshX+2, H-1);
+}
+
+// ── Log helper ──
+function log(msg, type='active') {
+  const logEl = document.getElementById('phase-log');
+  const line = document.createElement('div');
+  line.className = `log-line ${type}`;
+  const t = new Date();
+  const ts = `${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+  line.textContent = `[${ts}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+  document.getElementById('log-time').textContent = ts;
+}
+
+// ── Pipeline stage activate ──
+function setStage(stageId, state) {
+  STAGES.forEach(s => {
+    const el = document.getElementById(`ps-${s.id}`);
+    if (!el) return;
+    if (s.id === stageId) {
+      el.className = `pipe-stage ${state}`;
+    } else if (state === 'active') {
+      // Previous stages → done
+      const idx = STAGES.findIndex(x=>x.id===s.id);
+      const activeIdx = STAGES.findIndex(x=>x.id===stageId);
+      if (idx < activeIdx) el.className = 'pipe-stage done';
+    }
+  });
+}
+
+// ── Contact window countdown ──
+function startCW() {
+  cwInterval = setInterval(() => {
+    cwSecsLeft = Math.max(0, cwSecsLeft - 1);
+    const m = Math.floor(cwSecsLeft/60);
+    const s = cwSecsLeft % 60;
+    document.getElementById('cw-timer').textContent = `${m}:${String(s).padStart(2,'0')}`;
+    const pct = (cwSecsLeft/600)*100;
+    document.getElementById('cw-fill').style.width = pct + '%';
+    if (cwSecsLeft <= 120) {
+      document.getElementById('cw-timer').classList.add('urgent');
+      document.getElementById('cw-fill').classList.add('urgent');
+    }
+    if (cwSecsLeft <= 0) clearInterval(cwInterval);
+  }, 1000);
+}
+
+// ── Update BW ──
+function updateBW() {
+  const rp = Math.min(100,(randBW/BUDGET)*100);
+  const tp = Math.min(100,(tsBW/BUDGET)*100);
+  document.getElementById('rand-bw-used').textContent = randBW.toFixed(1);
+  document.getElementById('ts-bw-used').textContent   = tsBW.toFixed(1);
+  document.getElementById('rand-bw-bar').style.width  = rp + '%';
+  document.getElementById('ts-bw-bar').style.width    = tp + '%';
+  if (tp >= 99.5) document.getElementById('ts-bw-bar').classList.add('full');
+  document.getElementById('rand-novel-ct').textContent = randNovel;
+  document.getElementById('ts-novel-ct').textContent   = tsNovel;
+
+  if (randNovel > 0 || tsNovel > 0) {
+    const lift = randNovel > 0 ? (tsNovel / randNovel).toFixed(2) : '—';
+    document.getElementById('lift-val').textContent = lift + (randNovel > 0 ? '×' : '');
+    document.getElementById('lift-callout').classList.add('visible');
+  }
+}
+
+// ── Tile state helper ──
+function setTileDisplayState(tileId, state) {
+  const el = document.getElementById(`tile-${tileId}`);
+  if (el) {
+    el.className = `tile ${state}`;
+  }
+}
+
+// ── Main simulation ──
+function runSimulation() {
+  if (simState === 'running') return;
+  simState = 'running';
+
+  const runBtn = document.getElementById('run-btn');
+  runBtn.disabled = true;
+  runBtn.classList.add('running');
+  runBtn.textContent = '● Running...';
+
+  document.getElementById('phase-log').innerHTML = '';
+
+  // Mark tiles as idle initially
+  const order = viewMode === 'topsat' ? topsatOrder : randomOrder;
+  order.forEach(t => setTileDisplayState(t.id, 't-idle'));
+
+  startCW();
+  drawDistribution();
+
+  const phases = [
+    // [delay_ms, fn]
+    [0,    () => {
+      setStage('capture','active');
+      log('Tile stream incoming — 36 patches captured from camera module');
+      log('Sensor: Sentinel-2 MSI · 10m resolution · 64×64 RGB');
+      tiles.forEach(t => setTileDisplayState(t.id, t.novel ? 't-novel' : 't-archive'));
+    }],
+    [900,  () => {
+      setStage('encode','active');
+      log('RemoteCLIP ViT-L-14 encoding...');
+      log('768-dimensional embeddings · cosine metric space');
+    }],
+    [2200, () => {
+      setStage('ripser','active');
+      log('Ripser H₁ persistent homology on archive cloud...');
+      log(`Archive: ${archiveSet.size} classes · ${tiles.filter(t=>!t.novel).length} tiles`);
+      log('Computing Vietoris-Rips complex · window=80');
+    }],
+    [3800, () => {
+      setStage('bottleneck','active');
+      log('Bottleneck distance scoring...');
+      const novelCount = tiles.filter(t=>t.novel).length;
+      log(`${novelCount} tiles exceed threshold τ=0.0054 — flagged as novel`, 'warn');
+    }],
+    [5200, () => {
+      setStage('knapsack','active');
+      log('Knapsack scheduler — filling 12 MB budget...');
+      log(viewMode === 'topsat'
+        ? 'TOPSAT: sorting by novelty score descending'
+        : 'Random: FIFO order (no novelty awareness)');
+
+      // Animate tiles being transmitted
+      let step = 0;
+      const order = viewMode === 'topsat' ? topsatOrder : randomOrder;
+      let bwUsed = 0;
+      const budget = BUDGET;
+
+      const transmitInterval = setInterval(() => {
+        if (step >= order.length || bwUsed + TILE_MB > budget + 0.001) {
+          clearInterval(transmitInterval);
+          finishSim();
+          return;
+        }
+        const tile = order[step];
+        bwUsed += TILE_MB;
+
+        // Update both side BW bars
+        if (viewMode === 'topsat') {
+          tsBW = bwUsed;
+          // Random would have similar BW but different tile selection
+          randBW = Math.min(BUDGET, bwUsed * (0.9 + Math.random()*0.15));
+          // Random novel count: roughly proportional but misses OOD tiles placed later
+          const randProportion = bwUsed / BUDGET;
+          randNovel = Math.round(tiles.filter(t=>t.novel).length * randProportion * 0.58);
+          tsNovel = tiles.filter(t=>t.novel).reduce((sum, t) => {
+            const rank = topsatOrder.findIndex(x=>x.id===t.id);
+            const sentCount = step + 1;
+            return sum + (rank < sentCount ? 1 : 0);
+          }, 0);
+        } else {
+          randBW = bwUsed;
+          tsBW = Math.min(BUDGET, bwUsed);
+          randNovel = tiles.filter(t=>t.novel).reduce((sum, t) => {
+            const rank = randomOrder.findIndex(x=>x.id===t.id);
+            return sum + (rank <= step ? 1 : 0);
+          }, 0);
+          tsNovel = tiles.filter(t=>t.novel).reduce((sum, t) => {
+            const rank = topsatOrder.findIndex(x=>x.id===t.id);
+            const tsStep = Math.round(step * (bwUsed/BUDGET));
+            return sum + (rank < tsStep ? 1 : 0);
+          }, 0);
+        }
+
+        updateBW();
+        setTileDisplayState(tile.id, tile.novel ? 't-sent-novel' : 't-sent-archive');
+
+        // Mark queued = next tile
+        if (step + 1 < order.length) {
+          setTileDisplayState(order[step+1].id, 't-queued');
+        }
+
+        step++;
+      }, 180);
+    }],
+  ];
+
+  phases.forEach(([delay, fn]) => setTimeout(fn, delay));
+}
+
+function finishSim() {
+  setStage('downlink', 'active');
+  setTimeout(() => {
+    STAGES.forEach(s => {
+      const el = document.getElementById(`ps-${s.id}`);
+      if (el) el.className = 'pipe-stage done';
+    });
+  }, 600);
+
+  const tsN = tiles.filter(t=>t.novel).length;
+  const randN = Math.round(tsN * 0.58); // ~58% capture rate for random (matches 75/122 ratio)
+  tsNovel = tsN; randNovel = randN;
+  tsBW = BUDGET; randBW = BUDGET;
+  updateBW();
+
+  const lift = (tsN / Math.max(randN, 1)).toFixed(2);
+  log(`↑ Downlink complete — window closed`, 'done');
+  log(`TOPSAT: ${tsN} novel tiles · Random (est.): ${randN} novel tiles`, 'done');
+  log(`Scheduler lift: ${lift}× · BW both 12.0 MB`, 'done');
+
+  // Mark remaining tiles as skipped
+  const order = viewMode === 'topsat' ? topsatOrder : randomOrder;
+  const sentCount = 36;
+  order.slice(sentCount).forEach(t => setTileDisplayState(t.id, 't-skipped'));
+
+  clearInterval(cwInterval);
+  simState = 'done';
+
+  const runBtn = document.getElementById('run-btn');
+  runBtn.disabled = false;
+  runBtn.classList.remove('running');
+  runBtn.textContent = '↺  Reset & Run Again';
+
+  drawDistribution();
+}
+
+// ── View mode toggle ──
+document.querySelectorAll('.mt-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (simState === 'running') return;
+    viewMode = btn.dataset.mode;
+    document.querySelectorAll('.mt-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTileGrid();
+    if (simState === 'done') {
+      simState = 'idle';
+      resetStats();
+      rebuildTiles();
+    }
+  });
+});
+
+// ── Run button ──
+document.getElementById('run-btn').addEventListener('click', () => {
+  if (simState === 'done') {
+    simState = 'idle';
+    resetStats();
+    rebuildTiles();
+    document.getElementById('run-btn').textContent = '▶ Run Detection';
+    return;
+  }
+  runSimulation();
+});
+
+// ── Init ──
+buildArchiveSelector();
+buildOODPills();
+buildPipeline();
+rebuildTiles();
+clearDistCanvas();
+</script>
+</body>
+</html>

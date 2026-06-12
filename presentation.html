@@ -1,0 +1,2721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOPSAT — Topology-Guided Novelty Detection</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#03060B; --card:rgba(10,20,38,0.75);
+  --blue:#4DABF7; --blue-dim:#1864ab; --blue-glow:rgba(77,171,247,0.3);
+  --teal:#37B24D; --teal-glow:rgba(55,178,77,0.3);
+  --red:#F03E3E; --red-dim:rgba(240,62,62,0.1);
+  --amber:#F59F00; --amber-dim:rgba(245,159,0,0.1);
+  --purple:#9b7fd4; --purple-dim:rgba(155,127,212,0.1);
+  --white:#fff; --text:#E2E8F0; --text2:#8899aa; --text3:#4a6080;
+  --border:rgba(77,171,247,0.15); --border2:rgba(255,255,255,0.06);
+  --font:'Inter',sans-serif; --mono:'JetBrains Mono',monospace;
+}
+
+html,body{width:100%;height:100%;background:var(--bg);font-family:var(--font);overflow:hidden;color:var(--text)}
+
+/* ── COSMIC BACKGROUND ── */
+#cosmos{position:fixed;inset:0;z-index:0;pointer-events:none}
+.star{position:absolute;border-radius:50%;background:#fff;animation:twinkle var(--d,4s) ease-in-out infinite var(--dl,0s)}
+@keyframes twinkle{0%,100%{opacity:.08;transform:scale(.8)}50%{opacity:.65;transform:scale(1.2)}}
+.nebula{position:absolute;top:-20%;right:-10%;width:70vw;height:70vw;
+  background:radial-gradient(circle,rgba(77,171,247,.08) 0%,rgba(156,39,176,.04) 50%,transparent 100%);
+  filter:blur(70px);pointer-events:none;animation:nebula-drift 18s ease-in-out infinite alternate}
+.nebula2{position:absolute;bottom:-10%;left:-5%;width:50vw;height:50vw;
+  background:radial-gradient(circle,rgba(55,178,77,.04) 0%,rgba(77,171,247,.02) 60%,transparent 100%);
+  filter:blur(90px);pointer-events:none;animation:nebula-drift2 22s ease-in-out infinite alternate}
+@keyframes nebula-drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,-30px) scale(1.08)}}
+@keyframes nebula-drift2{0%{transform:translate(0,0)}100%{transform:translate(-30px,20px) scale(1.05)}}
+.grid-overlay{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(77,171,247,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(77,171,247,.025) 1px,transparent 1px);
+  background-size:64px 64px}
+
+/* ── LAYOUT SHELL ── */
+#app{position:relative;z-index:1;width:100vw;height:100vh;display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+header{
+  flex-shrink:0;padding:16px 40px;display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  background:linear-gradient(to bottom,rgba(3,6,11,.9),transparent);
+  position:relative;z-index:10
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-badge{
+  background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;
+  font-size:9px;font-weight:800;padding:3px 9px;border-radius:4px;letter-spacing:2px
+}
+.brand-name{
+  font-size:15px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;
+  background:linear-gradient(to right,#fff,var(--text2));-webkit-background-clip:text;-webkit-text-fill-color:transparent
+}
+.header-meta{font-size:11px;color:var(--text3);letter-spacing:1.5px}
+.section-tabs{display:flex;gap:8px}
+.stab{
+  font-size:9px;letter-spacing:2px;text-transform:uppercase;padding:4px 12px;
+  border-radius:4px;cursor:pointer;border:.5px solid rgba(255,255,255,.1);
+  background:transparent;color:var(--text3);font-family:var(--font);transition:all .2s
+}
+.stab:hover{background:rgba(77,171,247,.1);color:var(--blue);border-color:var(--border)}
+.stab.active-deck{background:rgba(77,171,247,.12);color:var(--blue);border-color:var(--border)}
+.stab.active-demo{background:rgba(55,178,77,.1);color:var(--teal);border-color:rgba(55,178,77,.3)}
+.stab.active-future{background:var(--amber-dim);color:var(--amber);border-color:rgba(245,159,0,.3)}
+
+/* ── VIEWPORT ── */
+.viewport{flex:1;position:relative;display:flex;justify-content:center;align-items:center;padding:12px 40px;min-height:0}
+
+/* ── SLIDES ── */
+.slide{
+  position:absolute;width:100%;max-width:1260px;height:100%;
+  display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateY(22px) scale(.985);
+  transition:opacity .55s cubic-bezier(.16,1,.3,1),transform .55s cubic-bezier(.16,1,.3,1),visibility .55s
+}
+.slide.active{opacity:1;visibility:visible;pointer-events:all;transform:translateY(0) scale(1)}
+/* Full-width slides */
+.slide.full{grid-template-columns:1fr;justify-items:center}
+.slide.full .text-panel{align-items:center;text-align:center;padding-right:0}
+
+/* ── TEXT PANEL ── */
+.text-panel{display:flex;flex-direction:column;justify-content:center;padding-right:10px}
+.scene-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:4px;color:var(--blue);margin-bottom:14px;
+  opacity:0;transform:translateY(-6px);transition:opacity .4s ease,transform .4s ease}
+.slide.active .scene-tag{opacity:1;transform:translateY(0);transition-delay:.05s}
+.scene-tag.arch-tag{color:var(--amber)}
+.headline{font-size:32px;font-weight:800;line-height:1.25;color:var(--white);margin-bottom:18px;text-shadow:0 4px 24px rgba(0,0,0,.6)}
+.headline em{font-style:normal;color:var(--blue);text-shadow:0 0 30px var(--blue-glow),0 0 60px rgba(77,171,247,.15)}
+.headline em.red{color:var(--red);text-shadow:0 0 24px rgba(240,62,62,.3)}
+.headline em.green{color:var(--teal);text-shadow:0 0 24px var(--teal-glow)}
+.headline em.amber{color:var(--amber);text-shadow:0 0 24px rgba(245,159,0,.3)}
+.bullets{list-style:none}
+.bullets li{
+  position:relative;padding-left:22px;margin-bottom:13px;
+  font-size:14.5px;line-height:1.65;color:var(--text2);
+  opacity:0;transform:translateX(-8px);
+  transition:opacity .4s ease,transform .4s ease
+}
+.slide.active .bullets li{opacity:1;transform:translateX(0)}
+.slide.active .bullets li:nth-child(1){transition-delay:.15s}
+.slide.active .bullets li:nth-child(2){transition-delay:.28s}
+.slide.active .bullets li:nth-child(3){transition-delay:.41s}
+.slide.active .bullets li:nth-child(4){transition-delay:.54s}
+.bullets li strong{color:var(--text);font-weight:600}
+.bullets li::before{
+  content:'';position:absolute;left:2px;top:9px;width:6px;height:6px;
+  background:var(--blue);border-radius:50%;box-shadow:0 0 8px var(--blue-glow)
+}
+.bullets li.bad::before{background:var(--red);box-shadow:0 0 7px rgba(240,62,62,.4)}
+.bullets li.good::before{background:var(--teal);box-shadow:0 0 7px var(--teal-glow)}
+.quote-wrap{
+  margin-top:20px;padding:14px 20px;
+  border-left:2px solid rgba(240,62,62,.3);
+  background:rgba(240,62,62,.05);border-radius:0 8px 8px 0;
+  font-style:italic;color:#c07070;font-size:13.5px;line-height:1.6
+}
+
+/* ── VISUAL PANEL ── */
+.visual-panel{
+  background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:16px;
+  box-shadow:0 30px 60px -15px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(24px);display:flex;justify-content:center;align-items:center;
+  padding:30px;position:relative;overflow:hidden;height:100%;max-height:460px;
+  transition:border-color .3s,box-shadow .3s
+}
+.visual-panel:hover{border-color:rgba(77,171,247,.12);box-shadow:0 30px 60px -15px rgba(0,0,0,.7),0 0 40px rgba(77,171,247,.04),inset 0 1px 0 rgba(255,255,255,.06)}
+.visual-panel.transparent{background:transparent;border:none;box-shadow:none;backdrop-filter:none}
+.visual-panel::before{
+  content:'';position:absolute;inset:0;border-radius:16px;
+  background:radial-gradient(circle at 50% 0%,rgba(77,171,247,.04),transparent 70%);
+  pointer-events:none
+}
+
+/* ══════════════════════════════════════
+   INTERACTIVE COMPONENTS
+═══════════════════════════════════════ */
+
+/* ── Orbit ── */
+.orbit-chassis{position:relative;width:260px;height:260px}
+.planet-core{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:90px;height:90px;
+  background:radial-gradient(circle at 30% 30%,#1c3d75,#091124);
+  border-radius:50%;box-shadow:0 0 40px rgba(33,150,243,.25)
+}
+.planet-atmo{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:110px;height:110px;border-radius:50%;
+  border:.5px solid rgba(77,171,247,.12);animation:atmo-pulse 4s ease-in-out infinite
+}
+@keyframes atmo-pulse{0%,100%{box-shadow:0 0 0 0 rgba(77,171,247,.1)}50%{box-shadow:0 0 0 12px rgba(77,171,247,.05)}}
+.orbit-ring{
+  position:absolute;inset:0;border:1px dashed rgba(255,255,255,.1);
+  border-radius:50%;animation:spin var(--spd,14s) linear infinite
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sat-node{
+  position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+  width:11px;height:11px;border-radius:50%;
+  background:var(--blue);box-shadow:0 0 14px var(--blue);
+  animation:sat-glow 2s ease-in-out infinite
+}
+@keyframes sat-glow{0%,100%{box-shadow:0 0 8px 2px rgba(77,171,247,.5)}50%{box-shadow:0 0 18px 6px rgba(77,171,247,.9)}}
+.orbit-ring2{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:170px;height:170px;border:.5px dashed rgba(255,255,255,.05);border-radius:50%;
+  animation:spin 8s linear infinite reverse
+}
+
+/* ── Bandwidth bar ── */
+.bw-wrap{width:100%;max-width:380px}
+.bw-label-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--text3)}
+.bw-track{height:28px;background:rgba(255,255,255,.04);border:.5px solid var(--border);border-radius:6px;overflow:hidden;display:flex}
+.bw-wasted{
+  height:100%;background:linear-gradient(90deg,rgba(40,60,90,.7),rgba(60,80,110,.5));
+  width:0;display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--text3);transition:width 1.4s cubic-bezier(.4,0,.2,1)
+}
+.bw-useful{
+  height:100%;background:linear-gradient(90deg,var(--blue-dim),var(--blue));
+  width:0;display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--white);transition:width 1.2s cubic-bezier(.4,0,.2,1) 1.4s;
+  box-shadow:0 0 15px rgba(77,171,247,.4)
+}
+.slide.active .bw-wasted{width:90%}
+.slide.active .bw-useful{width:10%}
+.bw-stat{display:flex;justify-content:space-between;margin-top:10px}
+.bw-stat-item{text-align:center}
+.bw-stat-n{font-size:22px;font-weight:700;color:var(--text);display:block}
+.bw-stat-n.red{color:var(--red)}
+.bw-stat-n.blue{color:var(--blue)}
+.bw-stat-l{font-size:10px;color:var(--text3);letter-spacing:.5px}
+
+/* ── Tile matrix ── */
+.matrix-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;max-width:320px}
+.tile{
+  aspect-ratio:1;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.05);
+  border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:11px;color:var(--text3);gap:4px;transition:all .3s
+}
+.tile i{font-size:18px}
+.tile.alert-node{
+  border-color:var(--red);background:rgba(240,62,62,.09);color:var(--white);
+  box-shadow:0 0 18px rgba(240,62,62,.2);
+  animation:tile-pulse 2s cubic-bezier(.4,0,.6,1) infinite
+}
+@keyframes tile-pulse{0%,100%{transform:scale(1);box-shadow:0 0 18px rgba(240,62,62,.2)}50%{transform:scale(1.05);box-shadow:0 0 28px rgba(240,62,62,.4)}}
+.tile.alert-node i{color:var(--red)}
+
+/* ── Intelligence slot ── */
+.cubesat-frame{
+  width:130px;height:270px;border:1.5px solid var(--text3);border-radius:10px;
+  padding:14px;display:flex;flex-direction:column;gap:12px;justify-content:flex-end;
+  background:linear-gradient(180deg,rgba(255,255,255,.01),transparent)
+}
+.slot{
+  height:54px;border:1px dashed rgba(255,255,255,.13);border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:var(--text3);text-align:center;padding:4px;font-weight:500
+}
+.slot.loaded{
+  border:1.5px solid var(--blue);
+  background:linear-gradient(135deg,#1A365D,#4A148C);
+  color:#fff;font-weight:700;
+  box-shadow:0 0 22px rgba(77,171,247,.35);
+  animation:slot-appear .6s cubic-bezier(.175,.885,.32,1.275) forwards
+}
+.slot.overload{border:1.5px solid var(--red);background:rgba(240,62,62,.09);color:var(--red);font-weight:700}
+.slot.topo{
+  border:1.5px solid var(--teal);
+  background:linear-gradient(135deg,#064E3B,#111827);
+  color:#fff;font-weight:700;
+  box-shadow:0 0 22px rgba(55,178,77,.3)
+}
+/* BLINKING SLOT for empty intelligence */
+.slot.blink-slot{
+  border:1.5px solid rgba(77,171,247,.4);
+  animation:blink-empty 1.8s ease-in-out infinite;
+  position:relative;overflow:hidden
+}
+@keyframes blink-empty{
+  0%,100%{border-color:rgba(77,171,247,.2);box-shadow:none;background:rgba(24,95,165,.04)}
+  50%{border-color:rgba(77,171,247,.9);box-shadow:0 0 20px 4px rgba(77,171,247,.3);background:rgba(24,95,165,.18)}
+}
+.slot.blink-slot::after{
+  content:'';position:absolute;top:0;left:-100%;width:55%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(77,171,247,.15),transparent);
+  animation:sweep 2.2s ease-in-out infinite
+}
+@keyframes sweep{0%{left:-55%}100%{left:160%}}
+.slot.blink-slot .mod-name{color:var(--blue)}
+
+@keyframes slot-appear{0%{transform:translateY(-15px);opacity:0}100%{transform:translateY(0);opacity:1}}
+
+/* ── Pipeline cards ── */
+.pipeline-chassis{display:flex;flex-direction:column;gap:10px;width:100%;max-width:380px}
+.pipeline-node{
+  background:rgba(255,255,255,.015);border-left:4px solid var(--blue);
+  border-top:.5px solid rgba(255,255,255,.03);border-right:.5px solid rgba(255,255,255,.03);border-bottom:.5px solid rgba(255,255,255,.03);
+  padding:13px 18px;border-radius:0 8px 8px 0;
+  display:flex;justify-content:space-between;align-items:center;font-size:14px;
+  transition:background .2s,transform .2s;cursor:default
+}
+.pipeline-node:hover{background:rgba(77,171,247,.07);transform:translateX(3px)}
+.pipeline-tag{font-size:10px;background:rgba(255,255,255,.05);padding:3px 8px;border-radius:4px;color:var(--text3);font-weight:600}
+
+/* Full pipeline row */
+.pipe-row{display:flex;align-items:stretch;gap:4px;flex-wrap:wrap;justify-content:center;width:100%}
+.pipe-box{
+  background:rgba(77,171,247,.07);border:.5px solid var(--border);
+  border-radius:8px;padding:12px 14px;text-align:center;flex:1;min-width:100px;max-width:135px;
+  transition:background .2s,transform .2s;cursor:default
+}
+.pipe-box:hover{background:rgba(77,171,247,.13);transform:translateY(-3px)}
+.pipe-n{font-size:9px;color:var(--blue);letter-spacing:1px;font-weight:600;margin-bottom:5px}
+.pipe-title{font-size:12px;color:var(--text);font-weight:600;margin-bottom:3px}
+.pipe-sub{font-size:10px;color:var(--text3);line-height:1.5}
+.pipe-arr{color:var(--text3);font-size:16px;align-self:center;padding:0 4px}
+
+/* Arch pipe */
+.pipe-box-arch{
+  background:rgba(245,159,0,.07);border:.5px solid rgba(245,159,0,.2);
+  border-radius:8px;padding:12px 14px;text-align:center;flex:1;min-width:90px;max-width:125px;
+  transition:background .2s,transform .2s;cursor:default
+}
+.pipe-box-arch:hover{background:rgba(245,159,0,.13);transform:translateY(-3px)}
+.pipe-n-arch{font-size:9px;color:var(--amber);letter-spacing:1px;font-weight:600;margin-bottom:5px}
+
+/* ── Metric cards ── */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%}
+.metric-card{
+  background:rgba(255,255,255,.015);border:.5px solid rgba(255,255,255,.04);
+  border-radius:12px;padding:20px 16px;text-align:center;
+  transition:transform .2s,box-shadow .2s;cursor:default
+}
+.metric-card:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.3)}
+.metric-card.span2{grid-column:span 2}
+.metric-card.blue-card{border-color:rgba(77,171,247,.15);background:linear-gradient(to top,rgba(77,171,247,.025),transparent)}
+.metric-card.green-card{border-color:rgba(55,178,77,.15);background:linear-gradient(to top,rgba(55,178,77,.025),transparent)}
+.metric-n{font-size:44px;font-weight:900;color:var(--blue);line-height:1.1;margin-bottom:6px;font-variant-numeric:tabular-nums;text-shadow:0 0 25px rgba(77,171,247,.25)}
+.metric-n.green{color:var(--teal);text-shadow:0 0 25px rgba(55,178,77,.25)}
+.metric-l{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);font-weight:600}
+
+/* ── Compare cards ── */
+.compare-row{display:flex;gap:12px;width:100%}
+.ccard{border-radius:10px;padding:18px;text-align:center;flex:1;transition:transform .2s;cursor:default}
+.ccard:hover{transform:translateY(-2px)}
+.ccard-dim{background:rgba(255,255,255,.025);border:.5px solid var(--border2)}
+.ccard-blue{background:rgba(77,171,247,.08);border:.5px solid rgba(77,171,247,.3)}
+.ccard-label{font-size:10px;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+.ccard-dim .ccard-label{color:var(--text3)}
+.ccard-blue .ccard-label{color:var(--blue)}
+.ccard-val{font-size:26px;font-weight:700}
+.ccard-dim .ccard-val{color:#4a6a8a}
+.ccard-blue .ccard-val{color:var(--blue)}
+.ccard-badge{display:inline-block;font-size:10px;margin-top:8px;padding:3px 8px;border-radius:12px}
+.badge-red{background:rgba(240,62,62,.12);color:var(--red)}
+.badge-blue{background:rgba(77,171,247,.12);color:var(--blue)}
+
+/* ── Animated bar chart ── */
+.bar-chart-wrap{display:flex;gap:40px;align-items:flex-end;justify-content:center;height:120px;margin-top:16px}
+.bar-item{text-align:center}
+.bar-val{font-size:15px;font-weight:700;margin-bottom:6px}
+.bar{width:64px;border-radius:5px 5px 0 0;height:0;transition:height 1.2s cubic-bezier(.34,1.56,.64,1)}
+.bar-grey{background:linear-gradient(180deg,#3a4f6e,#2a3a52)}
+.bar-blue{background:linear-gradient(180deg,var(--blue),var(--blue-dim));box-shadow:0 0 20px rgba(77,171,247,.3)}
+.slide.active .bar-grey{height:58px}
+.slide.active .bar-blue{height:105px}
+.bar-label{font-size:11px;color:var(--text3);margin-top:7px}
+
+/* ── Zero-shot demo ── */
+.zs-demo{width:100%;max-width:420px}
+.zs-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.zs-thumb{width:44px;height:44px;border-radius:6px;flex-shrink:0;border:.5px solid var(--border2);overflow:hidden}
+.zs-thumb svg{width:100%;height:100%}
+.zs-arr{color:var(--text3);font-size:13px;flex-shrink:0}
+.zs-embed{font-family:var(--mono);font-size:9px;color:var(--blue);background:rgba(77,171,247,.06);border:.5px solid var(--border);border-radius:4px;padding:4px 7px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.zs-lbl{font-size:11px;min-width:72px;text-align:right;font-weight:600}
+.zs-bar-wrap{flex:1;height:6px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden}
+.zs-bar{height:100%;border-radius:3px;width:0;transition:width 1s ease}
+.zs-known{background:linear-gradient(90deg,var(--blue-dim),var(--blue))}
+.zs-novel{background:linear-gradient(90deg,var(--amber),#f0c070)}
+.zs-score{font-size:12px;font-weight:700;min-width:36px;text-align:right}
+.zs-sep{width:100%;height:1px;background:rgba(255,255,255,.05);margin:6px 0}
+
+/* ── Manifold SVG ── */
+.manifold-wrap{width:100%;height:200px;border-radius:12px;background:rgba(255,255,255,.02);border:.5px solid var(--border2);overflow:hidden}
+.manifold-wrap svg{width:100%;height:100%}
+
+/* ── Spec list ── */
+.spec-list{display:flex;flex-direction:column;gap:8px;width:100%}
+.spec-row{
+  display:flex;align-items:center;gap:12px;
+  background:rgba(255,255,255,.025);border:.5px solid var(--border2);
+  border-radius:8px;padding:10px 14px;
+  transition:background .2s,transform .2s;cursor:default
+}
+.spec-row:hover{background:rgba(77,171,247,.06);transform:translateX(3px)}
+.spec-k{font-size:11px;font-family:var(--mono);color:var(--blue);font-weight:600;min-width:52px}
+.spec-k.amber{color:var(--amber)}
+.spec-v{font-size:13px;color:var(--text2)}
+
+/* ── Vision grid ── */
+.vision-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.vcard{
+  border-radius:10px;padding:16px 12px;text-align:center;
+  transition:transform .2s,box-shadow .2s;cursor:default
+}
+.vcard:hover{transform:translateY(-4px)}
+.vcard-b{background:rgba(77,171,247,.08);border:.5px solid rgba(77,171,247,.2)}
+.vcard-g{background:rgba(55,178,77,.08);border:.5px solid rgba(55,178,77,.2)}
+.vcard-a{background:var(--amber-dim);border:.5px solid rgba(245,159,0,.2)}
+.vcard-icon{font-size:22px;margin-bottom:8px}
+.vcard-title{font-size:12px;font-weight:700;margin-bottom:4px}
+.vcard-b .vcard-title{color:var(--blue)}
+.vcard-g .vcard-title{color:var(--teal)}
+.vcard-a .vcard-title{color:var(--amber)}
+.vcard-sub{font-size:10px;color:var(--text3);line-height:1.5}
+/* Staggered glow */
+.vcard:nth-child(1){animation:glow-b 3.2s ease-in-out infinite 0s}
+.vcard:nth-child(2){animation:glow-g 3.2s ease-in-out infinite .5s}
+.vcard:nth-child(3){animation:glow-a 3.2s ease-in-out infinite 1s}
+.vcard:nth-child(4){animation:glow-b 3.2s ease-in-out infinite 1.5s}
+.vcard:nth-child(5){animation:glow-g 3.2s ease-in-out infinite 2s}
+.vcard:nth-child(6){animation:glow-a 3.2s ease-in-out infinite 2.5s}
+@keyframes glow-b{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(77,171,247,.25)}}
+@keyframes glow-g{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(55,178,77,.2)}}
+@keyframes glow-a{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(245,159,0,.2)}}
+
+/* ── Hardware cards ── */
+.hw-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.hw-card{border-radius:10px;padding:14px 16px;transition:transform .2s;cursor:default}
+.hw-card:hover{transform:translateY(-3px)}
+.hw-ok{background:rgba(55,178,77,.08);border:.5px solid rgba(55,178,77,.25)}
+.hw-warn{background:var(--amber-dim);border:.5px solid rgba(245,159,0,.25)}
+.hw-dim{background:rgba(255,255,255,.02);border:.5px solid var(--border2)}
+.hw-name{font-size:11px;font-weight:700;margin-bottom:6px}
+.hw-ok .hw-name{color:var(--teal)}
+.hw-warn .hw-name{color:var(--amber)}
+.hw-dim .hw-name{color:var(--text2)}
+.hw-spec{font-size:10px;color:var(--text3);line-height:1.7}
+
+/* ── Loss card ── */
+.loss-card{
+  background:var(--purple-dim);border:.5px solid rgba(155,127,212,.25);
+  border-radius:12px;padding:18px 22px;width:100%
+}
+.loss-title{font-size:10px;color:var(--purple);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;font-weight:600}
+.loss-eq{font-family:var(--mono);font-size:12px;color:var(--text);line-height:2;background:rgba(255,255,255,.02);border-radius:6px;padding:10px 14px}
+.loss-eq span{color:var(--amber)}
+.loss-note{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.7}
+
+/* ── End card ── */
+.end-block{text-align:center;max-width:580px}
+.end-title{
+  font-size:44px;font-weight:800;
+  background:linear-gradient(to right,#fff,var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:14px;
+  animation:title-shimmer 3s ease-in-out infinite
+}
+@keyframes title-shimmer{
+  0%,100%{filter:none}
+  50%{filter:drop-shadow(0 0 20px rgba(77,171,247,.4))}
+}
+.end-sub{font-size:11px;color:var(--text3);letter-spacing:1.5px;margin-bottom:20px}
+.end-stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:24px}
+.end-stat{background:rgba(77,171,247,.07);border:.5px solid var(--border);border-radius:10px;padding:14px 22px;text-align:center}
+.end-stat-n{font-size:26px;font-weight:800;color:var(--blue);display:block}
+.end-stat-l{font-size:10px;color:var(--text3);margin-top:4px}
+.end-quote{font-size:13px;color:var(--text3);font-style:italic;line-height:1.8}
+
+/* ── Mission Control Demo Slide ── */
+@keyframes demo-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+@keyframes demo-log-in{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+@keyframes demo-tile-queue{from{box-shadow:0 0 4px rgba(77,171,247,.15)}to{box-shadow:0 0 14px rgba(77,171,247,.5)}}
+@keyframes demo-icon-pulse{from{box-shadow:0 0 8px rgba(55,138,221,.2)}to{box-shadow:0 0 20px rgba(55,138,221,.5)}}
+
+.demo-panel{background:rgba(255,255,255,.02);border:0.5px solid rgba(77,171,247,.15);border-radius:12px;overflow:hidden;}
+.demo-ph{padding:10px 14px;border-bottom:0.5px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between;}
+.demo-ptitle{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--blue);font-weight:500;font-family:var(--mono);}
+
+.demo-ac{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;border:0.5px solid transparent;transition:all .2s;user-select:none;margin-bottom:3px;}
+.demo-ac:hover{background:rgba(255,255,255,.03);}
+.demo-ac.selected{background:rgba(55,138,221,.08);border-color:rgba(55,138,221,.35);}
+.demo-ac-check{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--text3);display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;}
+.demo-ac.selected .demo-ac-check{background:#185fa5;border-color:var(--blue);}
+.demo-ac-check::after{content:'✓';font-size:9px;color:var(--blue);opacity:0;transition:opacity .15s;}
+.demo-ac.selected .demo-ac-check::after{opacity:1;}
+
+.demo-ood-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;border:0.5px solid rgba(208,88,88,.35);background:rgba(208,88,88,.06);font-size:10px;color:var(--text2);}
+
+.demo-mtbtn{flex:1;padding:6px 0;border-radius:6px;cursor:pointer;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);border:0.5px solid rgba(255,255,255,.08);background:transparent;color:var(--text3);transition:all .2s;}
+.demo-mtbtn.active{background:rgba(55,138,221,.15);border-color:rgba(55,138,221,.4);color:var(--blue);}
+
+.demo-tile{aspect-ratio:1;border-radius:7px;border:1px solid rgba(255,255,255,.05);background:rgba(255,255,255,.02);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:transform .15s,border-color .3s,box-shadow .3s,background .3s;overflow:visible;}
+.demo-tile:hover{transform:scale(1.12);z-index:10;}
+.demo-tile-emoji{font-size:14px;line-height:1;}
+.demo-tile-name{font-size:5.5px;color:var(--text3);font-family:var(--mono);margin-top:2px;text-align:center;padding:0 2px;}
+.demo-tile-score{font-size:5.5px;font-family:var(--mono);margin-top:1px;text-align:center;}
+.demo-tile-rank{position:absolute;top:2px;left:3px;font-size:6px;font-family:var(--mono);color:var(--text3);line-height:1;}
+
+.demo-tile.dt-idle{opacity:.5;}
+.demo-tile.dt-archive{border-color:rgba(55,138,221,.15);background:rgba(55,138,221,.04);}
+.demo-tile.dt-archive .demo-tile-score{color:var(--text3);}
+.demo-tile.dt-novel{border-color:rgba(208,88,88,.55);background:rgba(208,88,88,.08);box-shadow:0 0 10px rgba(208,88,88,.2);}
+.demo-tile.dt-novel .demo-tile-score{color:#e07070;}
+.demo-tile.dt-sent-novel{border-color:rgba(77,171,247,.7);background:rgba(55,138,221,.12);box-shadow:0 0 12px rgba(77,171,247,.3);}
+.demo-tile.dt-sent-novel .demo-tile-score{color:var(--blue);}
+.demo-tile.dt-sent-archive{border-color:rgba(93,202,165,.35);background:rgba(29,158,117,.06);}
+.demo-tile.dt-sent-archive .demo-tile-score{color:#5dcaa5;}
+.demo-tile.dt-skipped{opacity:.25;border-color:rgba(255,255,255,.04);}
+.demo-tile.dt-queued{border-color:rgba(77,171,247,.5);animation:demo-tile-queue .5s ease-in-out infinite alternate;}
+.demo-tile.dt-sent-novel::before,.demo-tile.dt-sent-archive::before{content:'↑';position:absolute;top:2px;right:3px;font-size:7px;color:var(--blue);font-family:var(--mono);}
+
+.demo-tile-tip{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#0c1824;border:0.5px solid rgba(55,138,221,.25);border-radius:7px;padding:7px 10px;white-space:nowrap;z-index:100;pointer-events:none;opacity:0;transition:opacity .15s;min-width:130px;}
+.demo-tile:hover .demo-tile-tip{opacity:1;}
+
+.demo-ps{display:flex;align-items:flex-start;gap:9px;padding:8px 0;position:relative;}
+.demo-ps:not(:last-child)::after{content:'';position:absolute;left:14px;top:32px;width:1px;height:calc(100% - 6px);background:rgba(255,255,255,.06);}
+.demo-ps-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;z-index:1;border:0.5px solid rgba(255,255,255,.08);background:rgba(10,18,32,1);transition:all .3s;}
+.demo-ps-name{font-size:11px;font-weight:500;color:var(--text2);transition:color .3s;}
+.demo-ps-sub{font-size:9px;color:var(--text3);margin-top:2px;font-family:var(--mono);}
+.demo-ps-time{font-size:9px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
+.demo-ps.active .demo-ps-icon{background:rgba(55,138,221,.15);border-color:rgba(55,138,221,.6);animation:demo-icon-pulse .8s ease-in-out infinite alternate;}
+.demo-ps.active .demo-ps-name{color:var(--blue);}
+.demo-ps.done .demo-ps-icon{background:rgba(29,158,117,.12);border-color:#1d9e75;}
+.demo-ps.done .demo-ps-name{color:#5dcaa5;}
+
+.demo-log-line{opacity:0;animation:demo-log-in .3s ease forwards;}
+.demo-log-line.done{color:#5dcaa5;}
+.demo-log-line.active{color:var(--blue);}
+.demo-log-line.warn{color:#e8a23a;}
+
+.ts-section{display:flex;flex-direction:column;gap:8px;}
+.ts-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2.5px;color:var(--text3);padding-left:2px;}
+.ts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.ts-card{
+  border-radius:10px;padding:14px 16px;position:relative;
+  display:flex;flex-direction:column;gap:5px;
+  transition:transform .2s,box-shadow .2s;cursor:default;
+}
+.ts-card:hover{transform:translateY(-3px);}
+.ts-blue{background:rgba(77,171,247,.07);border:.5px solid rgba(77,171,247,.2);}
+.ts-blue:hover{box-shadow:0 8px 24px rgba(77,171,247,.12);}
+.ts-purple{background:rgba(155,127,212,.08);border:.5px solid rgba(155,127,212,.25);}
+.ts-purple:hover{box-shadow:0 8px 24px rgba(155,127,212,.12);}
+.ts-amber{background:rgba(245,159,0,.07);border:.5px solid rgba(245,159,0,.22);}
+.ts-amber:hover{box-shadow:0 8px 24px rgba(245,159,0,.1);}
+.ts-green{background:rgba(55,178,77,.07);border:.5px solid rgba(55,178,77,.22);}
+.ts-green:hover{box-shadow:0 8px 24px rgba(55,178,77,.1);}
+.ts-dim{background:rgba(255,255,255,.025);border:.5px solid rgba(255,255,255,.06);}
+.ts-dim:hover{box-shadow:0 8px 24px rgba(255,255,255,.05);}
+.ts-icon{font-size:18px;margin-bottom:2px;}
+.ts-name{font-size:12px;font-weight:700;color:var(--text);}
+.ts-blue .ts-name{color:#74C0FC;}
+.ts-purple .ts-name{color:#b89fdc;}
+.ts-amber .ts-name{color:#F59F00;}
+.ts-green .ts-name{color:#51cf66;}
+.ts-dim .ts-name{color:var(--text2);}
+.ts-desc{font-size:10px;color:var(--text3);line-height:1.55;}
+.ts-badge{
+  position:absolute;top:10px;right:10px;
+  font-size:8px;font-weight:700;letter-spacing:1px;padding:2px 7px;
+  border-radius:4px;border:.5px solid;
+  background:rgba(77,171,247,.12);color:#74C0FC;border-color:rgba(77,171,247,.3);
+}
+
+.ipipe-stage{
+  display:flex;align-items:flex-start;gap:16px;
+  padding:14px 18px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.06);
+  background:rgba(10,20,38,.75);
+  margin-bottom:0;opacity:.35;
+  transition:opacity .5s,border-color .5s,box-shadow .5s;
+  position:relative;
+}
+.ipipe-stage.ipipe-active{
+  opacity:1;border-color:rgba(245,159,0,.55);
+  box-shadow:0 0 20px rgba(245,159,0,.12);
+}
+.ipipe-stage.ipipe-done{opacity:1;border-color:rgba(55,178,77,.45);box-shadow:0 0 10px rgba(55,178,77,.08);}
+.ipipe-icon{font-size:26px;min-width:38px;text-align:center;padding-top:2px;}
+.ipipe-body{flex:1;}
+.ipipe-title{font-size:13px;font-weight:700;margin-bottom:3px;color:var(--text);}
+.ipipe-sub{font-size:11px;color:var(--text3);line-height:1.55;}
+.ipipe-badge{
+  position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  font-size:9px;font-family:var(--mono);padding:3px 10px;
+  border-radius:4px;font-weight:700;border:.5px solid;letter-spacing:.06em;
+  white-space:nowrap;
+}
+.ipipe-connector{
+  width:2px;height:10px;background:rgba(255,255,255,.08);
+  margin:0 auto 0;
+  position:relative;left:35px;
+}
+
+/* ── Architecture section banner ── */
+.arch-banner{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:.6;pointer-events:none}
+
+/* ── Arch diagram ── */
+.arch-diag{display:flex;flex-direction:column;gap:6px;width:100%}
+.arch-row{display:flex;align-items:center;justify-content:center;gap:6px}
+.ablock{border-radius:8px;padding:10px 12px;text-align:center;font-size:11px;font-weight:600;transition:transform .2s;cursor:default;min-width:90px}
+.ablock:hover{transform:scale(1.04)}
+.ab-in{background:rgba(255,255,255,.03);border:.5px solid var(--border2);color:var(--text2)}
+.ab-cnn{background:rgba(77,171,247,.1);border:.5px solid rgba(77,171,247,.35);color:var(--blue)}
+.ab-out{background:rgba(55,178,77,.1);border:.5px solid rgba(55,178,77,.3);color:var(--teal)}
+.ablock-sub{font-size:9px;margin-top:3px;opacity:.7;font-weight:400}
+.arch-vsep{width:0;border-left:1px dashed rgba(77,171,247,.12);height:18px;margin:0 auto}
+.arch-arr{color:var(--text3);font-size:13px}
+
+/* ══ CHART SLIDES CSS ══ */
+.chart-slide-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:18px;width:100%;height:100%}
+.chart-card{background:rgba(10,20,38,0.85);border:1px solid rgba(77,171,247,0.13);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+.chart-card:hover{border-color:rgba(77,171,247,0.35);box-shadow:0 0 28px rgba(77,171,247,0.1)}
+.chart-card::before{content:'';position:absolute;inset:0;border-radius:14px;background:radial-gradient(circle at 50% 0%,rgba(77,171,247,.04),transparent 60%);pointer-events:none}
+.chart-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:4px}
+.chart-sub{font-size:10px;color:var(--text3);margin-bottom:10px}
+.chart-canvas-wrap{flex:1;position:relative;min-height:0}
+.chart-canvas-wrap svg{width:100%;height:100%}
+
+/* ROC curve */
+.roc-path{stroke:#4DABF7;stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.roc-diag{stroke:rgba(255,255,255,0.12);stroke-width:1;fill:none;stroke-dasharray:4,4}
+.roc-fill{fill:url(#roc-grad);opacity:0.18}
+.roc-dot{fill:#F03E3E;stroke:#fff;stroke-width:1.5}
+
+/* Histogram */
+.hist-bar-archive{fill:#4DABF7;opacity:0.75}
+.hist-bar-ood{fill:#FF7B9C;opacity:0.75}
+.hist-thresh{stroke:#fff;stroke-width:1.5;stroke-dasharray:5,3}
+
+/* Per-class bars */
+.pc-bar-archive{fill:none}
+.pc-bar-ood{fill:none}
+
+/* Knapsack bar chart */
+.ks-bar-random{fill:rgba(120,130,150,0.6)}
+.ks-bar-topsat{fill:url(#ks-grad)}
+
+/* UMAP */
+.umap-dot{opacity:0.7}
+
+/* Training curves */
+.tc-train{stroke:#4DABF7;stroke-width:2;fill:none}
+.tc-val{stroke:#F59F00;stroke-width:2;fill:none;stroke-dasharray:5,3}
+
+/* ── Shooting stars ── */
+.shooter{position:absolute;width:130px;height:1.5px;background:linear-gradient(90deg,rgba(255,255,255,.9),transparent);border-radius:1px;transform:rotate(-30deg);animation:shoot 1.1s ease-out forwards;pointer-events:none}
+@keyframes shoot{0%{opacity:1;transform:rotate(-30deg) translateX(0)}100%{opacity:0;transform:rotate(-30deg) translateX(360px)}}
+
+/* ── Flash overlay ── */
+#flash{position:fixed;inset:0;z-index:50;background:rgba(77,171,247,.06);opacity:0;pointer-events:none;transition:opacity .08s ease}
+
+/* ── Dot navigation ── */
+#dot-nav{display:flex;gap:5px;align-items:center;flex-wrap:wrap;max-width:260px}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.12);cursor:pointer;transition:all .25s;border:.5px solid rgba(255,255,255,.08);flex-shrink:0}
+.dot:hover{background:rgba(77,171,247,.5);transform:scale(1.3)}
+.dot-active{background:var(--blue)!important;box-shadow:0 0 8px rgba(77,171,247,.7);transform:scale(1.2)}
+
+/* ── Keyboard hint ── */
+#kb-hint{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(10,20,38,.92);border:.5px solid var(--border);border-radius:8px;padding:7px 16px;font-size:11px;color:var(--text3);letter-spacing:1px;opacity:0;transition:opacity .5s;pointer-events:none;z-index:100;white-space:nowrap;backdrop-filter:blur(12px)}
+
+/* ── Progress bar enhanced glow ── */
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue-dim),var(--blue));box-shadow:0 0 10px rgba(77,171,247,.5);border-radius:2px;width:0;transition:width .4s ease}
+
+/* Animated draw */
+@keyframes draw-in{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
+.draw-animate{stroke-dasharray:var(--len,800);stroke-dashoffset:var(--len,800)}
+.slide.active .draw-animate{animation:draw-in 1.4s cubic-bezier(.4,0,.2,1) forwards .3s}
+.slide.active .draw-animate.delay2{animation-delay:.7s}
+.slide.active .draw-animate.delay3{animation-delay:1.0s}
+
+@keyframes bar-grow-up{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
+.bar-animated{transform:scaleY(0);transform-origin:bottom}
+.slide.active .bar-animated{animation:bar-grow-up .8s cubic-bezier(.4,0,.2,1) forwards}
+.slide.active .bar-animated.d1{animation-delay:.2s}
+.slide.active .bar-animated.d2{animation-delay:.35s}
+.slide.active .bar-animated.d3{animation-delay:.5s}
+.slide.active .bar-animated.d4{animation-delay:.65s}
+.slide.active .bar-animated.d5{animation-delay:.8s}
+.slide.active .bar-animated.d6{animation-delay:.95s}
+
+@keyframes fade-pop{from{opacity:0;transform:scale(0)}to{opacity:0.7;transform:scale(1)}}
+.dot-animated{opacity:0}
+.slide.active .dot-animated{animation:fade-pop .15s ease forwards}
+
+/* Legend dot */
+.leg-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.leg-line{display:inline-block;width:16px;height:2px;margin-right:5px;vertical-align:middle;border-radius:1px}
+.chart-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--text3);margin-bottom:8px}
+
+/* Full-chart slides */
+.slide.full-chart{grid-template-columns:1fr}
+.full-chart-inner{width:100%;height:100%;display:flex;flex-direction:column}
+
+/* SKIP badge ── */
+.skip{
+  margin-left:auto;font-size:9px;padding:3px 7px;border-radius:4px;
+  background:rgba(240,62,62,.13);color:var(--red);font-weight:700;
+  letter-spacing:1.5px;text-transform:uppercase;flex-shrink:0;
+  animation:skip-blink 2s ease-in-out infinite
+}
+@keyframes skip-blink{0%,100%{opacity:.5;box-shadow:none}50%{opacity:1;box-shadow:0 0 8px rgba(240,62,62,.4)}}
+
+/* ══ RESULTS SUMMARY TILES ══ */
+.res-tile{
+  border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;
+  transition:transform .2s,box-shadow .2s;cursor:default
+}
+.res-tile:hover{transform:translateY(-3px)}
+.res-tile-blue{
+  background:linear-gradient(135deg,rgba(77,171,247,.07),rgba(77,171,247,.03));
+  border:.5px solid rgba(77,171,247,.22)
+}
+.res-tile-blue:hover{box-shadow:0 8px 28px rgba(77,171,247,.12)}
+.res-tile-green{
+  background:linear-gradient(135deg,rgba(55,178,77,.07),rgba(55,178,77,.03));
+  border:.5px solid rgba(55,178,77,.22)
+}
+.res-tile-green:hover{box-shadow:0 8px 28px rgba(55,178,77,.1)}
+.res-fig{
+  font-size:42px;font-weight:900;line-height:1;margin-bottom:6px;
+  color:var(--blue);font-variant-numeric:tabular-nums;
+  text-shadow:0 0 28px rgba(77,171,247,.2)
+}
+.res-label{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--text2);margin-bottom:10px
+}
+.res-divider{height:1px;width:100%;margin-bottom:10px;border-radius:1px}
+.res-sub{font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:2px}
+.res-sub strong{color:var(--text)}
+.slide.active .res-tile{opacity:1 !important;transform:translateY(0) scale(1) !important}
+
+/* ══ SCROLLABLE SLIDES — subtle scrollbar (slides 11–13, 15, 19) ══ */
+#s10,#s-techstack,#s-demo,#sR1,#sR2{
+  overflow-y:auto;overflow-x:hidden;display:block !important;
+  scroll-behavior:smooth;height:100% !important;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(77,171,247,.3) rgba(255,255,255,.03)
+}
+#s10::-webkit-scrollbar,#s-techstack::-webkit-scrollbar,#s-demo::-webkit-scrollbar,#sR1::-webkit-scrollbar,#sR2::-webkit-scrollbar{width:4px}
+#s10::-webkit-scrollbar-track,#s-techstack::-webkit-scrollbar-track,#s-demo::-webkit-scrollbar-track,#sR1::-webkit-scrollbar-track,#sR2::-webkit-scrollbar-track{background:rgba(255,255,255,.03);border-radius:2px}
+#s10::-webkit-scrollbar-thumb,#s-techstack::-webkit-scrollbar-thumb,#s-demo::-webkit-scrollbar-thumb,#sR1::-webkit-scrollbar-thumb,#sR2::-webkit-scrollbar-thumb{background:rgba(77,171,247,.3);border-radius:2px}
+#s10::-webkit-scrollbar-thumb:hover,#s-techstack::-webkit-scrollbar-thumb:hover,#s-demo::-webkit-scrollbar-thumb:hover,#sR1::-webkit-scrollbar-thumb:hover,#sR2::-webkit-scrollbar-thumb:hover{background:rgba(77,171,247,.6)}
+#sR1 .text-panel,#sR2 .text-panel{height:auto;min-height:fit-content;padding-bottom:32px}
+#sR1 .chart-slide-grid{height:auto;grid-template-rows:auto auto;min-height:540px}
+#sR2>div{height:auto;min-height:fit-content;padding-bottom:32px}
+#sR1 .chart-card,#sR2 .chart-card{min-height:220px}
+#sR1 .chart-canvas-wrap,#sR2 .chart-canvas-wrap{min-height:160px}
+
+
+footer{
+  flex-shrink:0;padding:16px 40px;display:flex;justify-content:space-between;align-items:center;
+  border-top:1px solid rgba(255,255,255,.04);
+  background:linear-gradient(to top,rgba(3,6,11,.9),transparent);
+  position:relative;z-index:10
+}
+.footer-left{display:flex;align-items:center;gap:22px}
+.autoplay-wrap{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text3);cursor:pointer;user-select:none}
+.checkbox{width:15px;height:15px;border:.5px solid rgba(255,255,255,.2);border-radius:3px;position:relative;background:rgba(255,255,255,.02)}
+.checkbox.on::after{content:'';position:absolute;inset:3px;background:var(--blue);border-radius:2px;box-shadow:0 0 6px var(--blue-glow)}
+.progress-track{width:300px;height:2px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--blue);box-shadow:0 0 8px var(--blue);border-radius:2px;width:0;transition:width .4s ease}
+.footer-right{display:flex;align-items:center;gap:12px}
+.slide-counter{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;letter-spacing:1px;margin-right:6px}
+.nav-btn{
+  background:rgba(255,255,255,.025);border:.5px solid rgba(255,255,255,.08);
+  color:var(--text);padding:9px 20px;border-radius:8px;cursor:pointer;
+  font-size:13px;font-weight:600;font-family:var(--font);
+  display:flex;align-items:center;gap:6px;transition:all .2s
+}
+.nav-btn:hover{background:rgba(77,171,247,.1);border-color:var(--blue);color:#fff;box-shadow:0 0 12px rgba(77,171,247,.2)}
+.nav-btn.primary{background:var(--blue);border-color:var(--blue);color:#03060B}
+.nav-btn.primary:hover{background:#339af0;color:#fff}
+
+/* ══════════════════════════════════════
+   INTRO SLIDE
+═══════════════════════════════════════ */
+.intro-slide{grid-template-columns:1fr!important;justify-items:center;align-items:center}
+.intro-inner{
+  display:flex;flex-direction:row;align-items:center;justify-content:center;
+  gap:80px;width:100%;max-width:1100px;padding:20px
+}
+/* Orbital rings art */
+.intro-rings{position:relative;width:260px;height:260px;flex-shrink:0}
+.iring{position:absolute;top:50%;left:50%;border-radius:50%;border:1px solid rgba(77,171,247,.18);transform:translate(-50%,-50%)}
+.iring1{width:80px;height:80px;border-color:rgba(77,171,247,.45);animation:irspin 5s linear infinite}
+.iring2{width:140px;height:140px;border-color:rgba(77,171,247,.22);animation:irspin 9s linear infinite reverse;border-style:dashed}
+.iring3{width:200px;height:200px;border-color:rgba(155,127,212,.15);animation:irspin 14s linear infinite}
+.iring4{width:256px;height:256px;border-color:rgba(77,171,247,.07);animation:irspin 20s linear infinite reverse}
+@keyframes irspin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.iring1::after,.iring2::after,.iring3::after{
+  content:'';position:absolute;width:10px;height:10px;border-radius:50%;top:-5px;left:50%;transform:translateX(-50%)
+}
+.iring1::after{background:var(--blue);box-shadow:0 0 12px var(--blue)}
+.iring2::after{background:var(--purple);box-shadow:0 0 10px var(--purple)}
+.iring3::after{background:var(--teal);box-shadow:0 0 10px var(--teal)}
+.intro-core{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:52px;height:52px;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%,#1c3d75,#050e1d);
+  box-shadow:0 0 30px rgba(77,171,247,.3),0 0 60px rgba(77,171,247,.12);
+  display:flex;align-items:center;justify-content:center
+}
+.intro-sat{font-size:22px;filter:drop-shadow(0 0 8px rgba(77,171,247,.6))}
+
+/* Text */
+.intro-text{display:flex;flex-direction:column;gap:0;max-width:520px}
+.intro-eyebrow{font-size:9px;font-weight:700;letter-spacing:3.5px;color:var(--text3);text-transform:uppercase;margin-bottom:16px}
+.intro-title{
+  font-size:76px;font-weight:900;line-height:1;letter-spacing:-2px;margin-bottom:16px;
+  background:linear-gradient(135deg,#fff 30%,#4DABF7 70%,#9b7fd4 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 40px rgba(77,171,247,.2));
+  animation:intro-glow 4s ease-in-out infinite;
+  opacity:0;transform:translateY(16px);transition:opacity .6s ease .1s,transform .6s cubic-bezier(.16,1,.3,1) .1s
+}
+.intro-slide.active .intro-title{opacity:1;transform:translateY(0)}
+.intro-tagline{font-size:16px;color:var(--text2);line-height:1.6;margin-bottom:22px;font-weight:400;opacity:0;transform:translateY(10px);transition:opacity .5s ease .35s,transform .5s ease .35s}
+.intro-slide.active .intro-tagline{opacity:1;transform:translateY(0)}
+.intro-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:28px}
+.ichip{font-size:10px;font-weight:700;padding:4px 12px;border-radius:20px;letter-spacing:.5px;opacity:0;transform:translateY(8px)}
+.intro-slide.active .ichip:nth-child(1){animation:chip-in .4s ease .5s forwards}
+.intro-slide.active .ichip:nth-child(2){animation:chip-in .4s ease .65s forwards}
+.intro-slide.active .ichip:nth-child(3){animation:chip-in .4s ease .8s forwards}
+.intro-slide.active .ichip:nth-child(4){animation:chip-in .4s ease .95s forwards}
+@keyframes chip-in{to{opacity:1;transform:translateY(0)}}
+.intro-cta{
+  display:inline-flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,rgba(77,171,247,.15),rgba(155,127,212,.1));
+  border:1px solid rgba(77,171,247,.3);border-radius:10px;
+  padding:12px 24px;font-size:13px;font-weight:700;color:#fff;
+  cursor:pointer;letter-spacing:.5px;width:fit-content;
+  transition:all .25s;position:relative;overflow:hidden;
+  opacity:0;animation:chip-in .5s ease 1.1s forwards
+}
+.intro-slide.active .intro-cta{animation:chip-in .5s ease 1.1s forwards}
+.intro-title span{background:linear-gradient(135deg,#4DABF7,#9b7fd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+@keyframes intro-glow{0%,100%{filter:drop-shadow(0 0 20px rgba(77,171,247,.15))}50%{filter:drop-shadow(0 0 50px rgba(77,171,247,.35))}}
+.intro-divider{width:50px;height:2px;background:linear-gradient(90deg,var(--blue),transparent);margin-bottom:20px;border-radius:2px}
+.ichip-blue{background:rgba(77,171,247,.12);border:.5px solid rgba(77,171,247,.3);color:var(--blue)}
+.ichip-green{background:rgba(55,178,77,.1);border:.5px solid rgba(55,178,77,.3);color:var(--teal)}
+.ichip-amber{background:rgba(245,159,0,.1);border:.5px solid rgba(245,159,0,.3);color:var(--amber)}
+.ichip-purple{background:rgba(155,127,212,.1);border:.5px solid rgba(155,127,212,.3);color:var(--purple)}
+.intro-cta::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(77,171,247,.25),transparent);opacity:0;transition:opacity .25s}
+.intro-cta:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(77,171,247,.25);border-color:rgba(77,171,247,.6)}
+.intro-cta:hover::before{opacity:1}
+.intro-arrow{font-size:16px;transition:transform .25s}
+.intro-cta:hover .intro-arrow{transform:translateX(4px)}
+
+/* ══════════════════════════════════════
+   CLOSING SLIDE
+═══════════════════════════════════════ */
+.closing-slide{grid-template-columns:1fr!important}
+.close-inner{
+  display:flex;flex-direction:row;align-items:center;justify-content:center;
+  gap:64px;width:100%;max-width:1100px;padding:20px
+}
+/* Left orbital art */
+.close-art{position:relative;width:220px;height:220px;flex-shrink:0}
+.close-rings{position:relative;width:220px;height:220px}
+.cring{position:absolute;top:50%;left:50%;border-radius:50%;transform:translate(-50%,-50%)}
+.cr1{width:70px;height:70px;border:1.5px solid rgba(55,178,77,.5);animation:irspin 4s linear infinite}
+.cr2{width:130px;height:130px;border:1px dashed rgba(77,171,247,.25);animation:irspin 10s linear infinite reverse}
+.cr3{width:210px;height:210px;border:.5px solid rgba(155,127,212,.12);animation:irspin 18s linear infinite}
+.cr1::after{content:'';position:absolute;width:9px;height:9px;border-radius:50%;top:-4.5px;left:50%;transform:translateX(-50%);background:var(--teal);box-shadow:0 0 12px var(--teal)}
+.cr2::after{content:'';position:absolute;width:8px;height:8px;border-radius:50%;top:-4px;left:50%;transform:translateX(-50%);background:var(--blue);box-shadow:0 0 10px var(--blue)}
+.cring-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#1c3d75,#050e1d);box-shadow:0 0 30px rgba(55,178,77,.3);display:flex;align-items:center;justify-content:center}
+.close-sat{font-size:20px}
+.cring-beam{
+  position:absolute;top:50%;left:50%;width:80px;height:1px;transform-origin:0 0;
+  background:linear-gradient(90deg,rgba(55,178,77,.5),transparent);
+  animation:beam-rotate 3s linear infinite
+}
+@keyframes beam-rotate{to{transform:rotate(360deg)}}
+
+/* Right content */
+.close-content{display:flex;flex-direction:column;gap:0;max-width:580px;flex:1}
+.close-eyebrow{font-size:9px;font-weight:700;letter-spacing:4px;color:var(--teal);text-transform:uppercase;margin-bottom:12px}
+.close-title{
+  font-size:58px;font-weight:900;line-height:1;margin-bottom:8px;
+  background:linear-gradient(135deg,#fff,#4DABF7 60%,#37B24D);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:intro-glow 3.5s ease-in-out infinite
+}
+.close-subtitle{font-size:14px;color:var(--text2);margin-bottom:22px;letter-spacing:.3px}
+.close-stats{display:flex;align-items:center;gap:0;margin-bottom:22px;background:rgba(255,255,255,.02);border:.5px solid rgba(255,255,255,.05);border-radius:12px;padding:16px 20px}
+.cstat{text-align:center;flex:1}
+.cstat-n{font-size:26px;font-weight:900;color:var(--blue);display:block;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.cstat-l{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);font-weight:600}
+.cstat-div{width:1px;height:40px;background:rgba(255,255,255,.06)}
+.close-quote{font-size:13px;color:var(--text3);font-style:italic;line-height:1.8;padding:12px 16px;border-left:2px solid rgba(55,178,77,.3);background:rgba(55,178,77,.04);border-radius:0 8px 8px 0;margin-bottom:18px}
+.close-team{margin-bottom:20px}
+.close-team-label{font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:600}
+.close-pills{display:flex;flex-wrap:wrap;gap:6px}
+.cpill{font-size:10px;background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.08);border-radius:20px;padding:3px 10px;color:var(--text3)}
+.close-nav-row{display:flex;gap:10px;flex-wrap:wrap}
+.close-btn{background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.1);color:var(--text);padding:9px 18px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font);transition:all .2s}
+.close-btn:hover{background:rgba(55,178,77,.12);border-color:rgba(55,178,77,.3);color:var(--teal)}
+.close-btn-primary{background:linear-gradient(135deg,rgba(55,178,77,.15),rgba(77,171,247,.1));border:.5px solid rgba(55,178,77,.35);color:var(--teal)}
+.close-btn-primary:hover{background:linear-gradient(135deg,rgba(55,178,77,.25),rgba(77,171,247,.15));box-shadow:0 6px 20px rgba(55,178,77,.2)}
+</style>
+</head>
+<body>
+
+<!-- Background -->
+<div id="flash"></div>
+<div id="kb-hint">← → Arrow keys or Space to navigate · F for fullscreen</div>
+<div id="cosmos"><div class="nebula"></div><div class="nebula2"></div></div>
+<div class="grid-overlay"></div>
+
+<div id="app">
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="brand">
+    <span class="brand-badge">TDA CORE V3</span>
+    <span class="brand-name">TOPSAT Pipeline</span>
+  </div>
+  <div class="section-tabs">
+    <button class="stab active-deck" id="tab-deck" onclick="jump(0)">Pitchdeck</button>
+    <button class="stab" id="tab-demo" onclick="jump(14)">Demo</button>
+    <button class="stab" id="tab-future" onclick="jump(15)">Future</button>
+  </div>
+  <div class="header-meta">FINAL PRESENTATION // INTERACTIVE</div>
+</header>
+
+<!-- ── VIEWPORT ── -->
+<div class="viewport">
+
+<!-- ══ INTRO SPLASH ══ -->
+<div class="slide active intro-slide" id="s-intro">
+  <div class="intro-inner">
+    <!-- Animated rings -->
+    <div class="intro-rings">
+      <div class="iring iring1"></div>
+      <div class="iring iring2"></div>
+      <div class="iring iring3"></div>
+      <div class="iring iring4"></div>
+      <div class="intro-core">
+        <div class="intro-sat">🛰️</div>
+      </div>
+    </div>
+    <!-- Text block -->
+    <div class="intro-text">
+      <div class="intro-eyebrow">FAR AWAY 2026 · SPACE & AEROSPACE · TDA CORE V3</div>
+      <h1 class="intro-title">TOP<span>SAT</span></h1>
+      <div class="intro-tagline">Topology-Guided Novelty Detection<br>for Satellite Downlink Prioritisation</div>
+      <div class="intro-divider"></div>
+      <div class="intro-chips">
+        <span class="ichip ichip-blue">AUC 0.873</span>
+        <span class="ichip ichip-green">1.62× Yield Lift</span>
+        <span class="ichip ichip-amber">Cohen's d 1.529</span>
+        <span class="ichip ichip-purple">+0.141 TDA Gain</span>
+      </div>
+      <div class="intro-cta" onclick="go(1)">Begin Presentation <span class="intro-arrow">→</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 01 — Orbit + Waste (merged) ══ -->
+<div class="slide" id="s0">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:#fff">THE</span> <span style="color:var(--blue)">WASTE</span></div>
+    <h2 class="headline">Every <em>97 minutes</em>, one chance to send data. <em class="red">90% wasted.</em></h2>
+    <ul class="bullets">
+      <li>Satellites orbit at 7.5 km/s — one 10-minute contact window per pass to downlink.</li>
+      <li class="bad"><strong>90% of that bandwidth is squandered</strong> on redundant forests, empty plains, repeated terrain.</li>
+      <li>A 12MB window transmitting the same mountain range for the 4,000th time.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:18px">
+      <div class="orbit-chassis" style="width:160px;height:160px">
+        <div class="planet-core"></div>
+        <div class="planet-atmo"></div>
+        <div class="orbit-ring" style="--spd:14s"><div class="sat-node"></div></div>
+        <div class="orbit-ring2"></div>
+      </div>
+      <div class="bw-wrap" style="max-width:300px">
+        <div class="bw-label-row"><span>Downlink — 12MB window</span><span>10 min contact</span></div>
+        <div class="bw-track">
+          <div class="bw-wasted" id="bw-wasted">90% wasted</div>
+          <div class="bw-useful" id="bw-useful">10%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 02 — Hardware + Blind Satellite (merged) ══ -->
+<div class="slide" id="s1">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:#fff">THE</span> <span style="color:var(--blue)">BLIND SATELLITE</span></div>
+    <h2 class="headline">Extraordinary hardware. <em class="red">Zero understanding.</em></h2>
+    <ul class="bullets">
+      <li>Solar panels, high-gain antenna, 10m/px sensor — everything optimised except the <strong>intelligence layer.</strong></li>
+      <li class="bad">Critical events — wildfire fronts, overnight facilities, river shifts — get <strong>skipped</strong> like routine terrain.</li>
+      <li>One empty slot in the compute stack. Waiting.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div style="display:flex;gap:24px;align-items:center;justify-content:center">
+      <div class="cubesat-frame">
+        <div class="slot">Camera Module</div>
+        <div class="slot blink-slot"><span class="mod-name">Intelligence<br><span style="font-size:9px;opacity:.5">— slot empty —</span></span></div>
+        <div class="slot">Storage Stack</div>
+      </div>
+      <div class="matrix-grid" style="max-width:160px">
+        <div class="tile"><i class="ti ti-trees"></i>Forest</div>
+        <div class="tile"><i class="ti ti-trees"></i>Forest</div>
+        <div class="tile alert-node"><i class="ti ti-flame"></i>Wildfire</div>
+        <div class="tile"><i class="ti ti-mountain"></i>Terrain</div>
+        <div class="tile"><i class="ti ti-waves-create"></i>Ocean</div>
+        <div class="tile alert-node"><i class="ti ti-ripple"></i>Flood</div>
+        <div class="tile"><i class="ti ti-mountain"></i>Terrain</div>
+        <div class="tile"><i class="ti ti-trees"></i>Forest</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 03 — Root Cause ══ -->
+<div class="slide" id="s2">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:#fff">THE</span> <span style="color:var(--blue)">PROBLEM</span></div>
+    <h2 class="headline">Rule-based classifiers <em class="red">always fail</em> at novelty.</h2>
+    <ul class="bullets">
+      <li>Standard AI forces every tile into a pre-defined category.</li>
+      <li class="bad">Novel events belong to <strong>no known category</strong> — they get misclassified.</li>
+      <li>The failure is architectural, not a training data problem.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div style="width:100%;max-width:320px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase">Classifier output</div>
+      <div class="compare-row">
+        <div class="ccard ccard-dim"><div class="ccard-label">Known class</div><div class="ccard-val">Forest</div><div class="ccard-badge badge-blue">Assigned ✓</div></div>
+        <div class="ccard" style="background:rgba(240,62,62,.08);border:.5px solid rgba(240,62,62,.3);flex:1;border-radius:10px;padding:18px;text-align:center">
+          <div class="ccard-label" style="color:var(--red)">Novel event</div>
+          <div class="ccard-val" style="color:var(--red);font-size:22px">???</div>
+          <div class="ccard-badge badge-red">Misclassified ✗</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 04 — Solution ══ -->
+<div class="slide" id="s3">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:#fff">OUR</span> <span style="color:var(--blue)">SOLUTION</span></div>
+    <h2 class="headline"><em>TOPSAT</em> — the intelligence layer.</h2>
+    <ul class="bullets">
+      <li>Topology-Guided Novelty Detection inserted directly into the compute stack.</li>
+      <li class="good">Replaces rigid rule-checking with <strong>mathematical manifold analysis.</strong></li>
+      <li class="good">Works without prior labels. Detects the genuinely unknown.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div class="cubesat-frame">
+      <div class="slot">Camera Module</div>
+      <div class="slot loaded">TOPSAT Engine Core</div>
+      <div class="slot">Storage Stack</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 05 — Key Features ══ -->
+<div class="slide" id="s4-kf">
+  <div class="text-panel">
+    <h2 class="headline">What makes <em>TOPSAT</em> different.</h2>
+    <ul class="bullets">
+      <li class="good"><strong>Label-free novelty detection</strong> — no class annotations needed; works on unseen event types.</li>
+      <li class="good"><strong>Mathematically grounded</strong> — persistent homology provides provable, noise-stable anomaly scores.</li>
+      <li class="good"><strong>Bandwidth-optimal scheduler</strong> — Knapsack algorithm maximises novel tiles per 12MB window.</li>
+      <li class="good"><strong>On-board for heavier satellites</strong> — fits the single available compute slot; runs in the contact window.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div style="width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px">
+      <div class="pipeline-node" style="border-left-color:var(--teal)">
+        <span style="color:var(--teal);font-weight:600">No Labels Required</span>
+        <span class="pipeline-tag" style="color:var(--teal)">Unsupervised</span>
+      </div>
+      <div class="pipeline-node" style="border-left-color:var(--blue)">
+        <span style="color:var(--blue);font-weight:600">Topological Stability</span>
+        <span class="pipeline-tag" style="color:var(--blue)">H₁ Homology</span>
+      </div>
+      <div class="pipeline-node" style="border-left-color:var(--amber)">
+        <span style="color:var(--amber);font-weight:600">1.62× Yield Lift</span>
+        <span class="pipeline-tag" style="color:var(--amber)">Knapsack</span>
+      </div>
+      <div class="pipeline-node" style="border-left-color:var(--purple)">
+        <span style="color:var(--purple);font-weight:600">Edge-Deployable</span>
+        <span class="pipeline-tag" style="color:var(--purple)">On-board</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 07 — RemoteCLIP zero-shot ══ -->
+<div class="slide" id="s6">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:var(--blue)">REMOTECLIP</span></div>
+    <h2 class="headline"><em>Zero-shot</em> satellite vision.</h2>
+    <ul class="bullets">
+      <li>ViT-L-14 fine-tuned on satellite imagery — no class labels required.</li>
+      <li>Projects any tile into a <strong>shared 768-D semantic space.</strong></li>
+      <li class="good">Known terrain sits near archive cluster centres. Novel terrain diverges far.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div class="zs-demo">
+      <div class="zs-row">
+        <div class="zs-thumb"><svg viewBox="0 0 44 44"><rect width="44" height="44" fill="#1a2a1a"/>
+          <rect x="3" y="3" width="9" height="9" fill="#2d5a2d" rx="1"/><rect x="16" y="3" width="9" height="9" fill="#3a6e3a" rx="1"/>
+          <rect x="29" y="3" width="9" height="9" fill="#254525" rx="1"/><rect x="3" y="16" width="9" height="9" fill="#3a6e3a" rx="1"/>
+          <rect x="16" y="16" width="9" height="9" fill="#4a8a4a" rx="1"/><rect x="29" y="16" width="9" height="9" fill="#2d5a2d" rx="1"/>
+          <rect x="3" y="29" width="9" height="9" fill="#254525" rx="1"/><rect x="16" y="29" width="9" height="9" fill="#3a6e3a" rx="1"/>
+          <rect x="29" y="29" width="9" height="9" fill="#3a6e3a" rx="1"/>
+        </svg></div>
+        <div class="zs-arr">→</div>
+        <div class="zs-embed">[0.21, -0.08, 0.44, 0.12 ...]</div>
+        <div class="zs-lbl" style="color:var(--teal)">Agriculture</div>
+        <div class="zs-bar-wrap"><div class="zs-bar zs-known" id="zb1" style="width:17%"></div></div>
+        <div class="zs-score" style="color:var(--teal)">0.17</div>
+      </div>
+      <div class="zs-row">
+        <div class="zs-thumb"><svg viewBox="0 0 44 44"><rect width="44" height="44" fill="#101820"/>
+          <rect x="5" y="5" width="7" height="7" fill="#2a3a4a" rx="1"/><rect x="16" y="5" width="13" height="7" fill="#1e2e3e" rx="1"/>
+          <rect x="33" y="5" width="5" height="7" fill="#2a3a4a" rx="1"/><rect x="5" y="16" width="13" height="7" fill="#253545" rx="1"/>
+          <rect x="22" y="16" width="16" height="7" fill="#1e2e3e" rx="1"/><rect x="5" y="27" width="9" height="11" fill="#2a3a4a" rx="1"/>
+          <rect x="18" y="27" width="20" height="11" fill="#253545" rx="1"/>
+        </svg></div>
+        <div class="zs-arr">→</div>
+        <div class="zs-embed">[0.63, 0.41, -0.12, 0.38 ...]</div>
+        <div class="zs-lbl" style="color:var(--blue)">Urban</div>
+        <div class="zs-bar-wrap"><div class="zs-bar zs-known" id="zb2" style="width:21%"></div></div>
+        <div class="zs-score" style="color:var(--blue)">0.21</div>
+      </div>
+      <div class="zs-sep"></div>
+      <div class="zs-row">
+        <div class="zs-thumb"><svg viewBox="0 0 44 44"><rect width="44" height="44" fill="#0a1015"/>
+          <ellipse cx="22" cy="22" r="17" fill="#0d1f2d" stroke="rgba(245,159,0,.3)" stroke-width="1.5" stroke-dasharray="3,3"/>
+          <circle cx="22" cy="22" r="4" fill="rgba(245,159,0,.4)"/>
+          <circle cx="15" cy="17" r="2" fill="rgba(245,159,0,.3)"/><circle cx="29" cy="14" r="2" fill="rgba(245,159,0,.3)"/>
+          <circle cx="32" cy="28" r="2" fill="rgba(245,159,0,.3)"/>
+        </svg></div>
+        <div class="zs-arr">→</div>
+        <div class="zs-embed" style="color:var(--amber)">[0.87, -0.74, 0.91, -0.53 ...]</div>
+        <div class="zs-lbl" style="color:var(--amber)">⚡ Unknown</div>
+        <div class="zs-bar-wrap"><div class="zs-bar zs-novel" id="zb3" style="width:89%"></div></div>
+        <div class="zs-score" style="color:var(--amber)">0.89</div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:10px;text-align:right">Novelty score → higher = more novel</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 08 ══ -->
+<div class="slide" id="s7">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:var(--blue)">PERSISTENT HOMOLOGY</span></div>
+    <h2 class="headline">Known terrain forms a <em>manifold.</em> Novel terrain creates holes.</h2>
+    <ul class="bullets">
+      <li>The archive of known terrain occupies compact clusters on the hypersphere.</li>
+      <li class="good">Ripser filtration detects H₁ structural holes in the manifold — mathematically guaranteed.</li>
+      <li>Novel terrain cannot be assigned to any cluster. It stands alone.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div class="manifold-wrap">
+      <svg viewBox="0 0 360 200" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="180" cy="100" rx="155" ry="80" fill="none" stroke="rgba(77,171,247,.07)" stroke-width="1"/>
+        <g><circle cx="90" cy="85" r="28" fill="rgba(77,171,247,.07)" stroke="rgba(77,171,247,.22)" stroke-width="1"/>
+          <text x="90" y="80" text-anchor="middle" font-size="9" fill="#4dabf7" font-family="Inter,sans-serif">Urban</text>
+          <circle cx="90" cy="85" r="3.5" fill="#4dabf7"/>
+          <circle cx="76" cy="94" r="2" fill="#4dabf7" opacity=".6"/><circle cx="104" cy="76" r="2" fill="#4dabf7" opacity=".6"/>
+          <circle cx="84" cy="97" r="1.5" fill="#4dabf7" opacity=".4"/>
+        </g>
+        <g><circle cx="192" cy="118" r="25" fill="rgba(55,178,77,.07)" stroke="rgba(55,178,77,.22)" stroke-width="1"/>
+          <text x="192" y="113" text-anchor="middle" font-size="9" fill="#37b24d" font-family="Inter,sans-serif">Agri</text>
+          <circle cx="192" cy="118" r="3.5" fill="#37b24d"/>
+          <circle cx="179" cy="126" r="2" fill="#37b24d" opacity=".6"/><circle cx="205" cy="110" r="2" fill="#37b24d" opacity=".6"/>
+        </g>
+        <g><circle cx="286" cy="80" r="22" fill="rgba(155,127,212,.07)" stroke="rgba(155,127,212,.2)" stroke-width="1"/>
+          <text x="286" y="75" text-anchor="middle" font-size="9" fill="#9b7fd4" font-family="Inter,sans-serif">Water</text>
+          <circle cx="286" cy="80" r="3.5" fill="#9b7fd4"/>
+          <circle cx="274" cy="89" r="2" fill="#9b7fd4" opacity=".6"/>
+        </g>
+        <!-- OOD animated point -->
+        <line x1="155" y1="38" x2="90" y2="85" stroke="rgba(245,159,0,.18)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="155" y1="38" x2="192" y2="118" stroke="rgba(245,159,0,.18)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="155" y1="38" x2="286" y2="80" stroke="rgba(245,159,0,.12)" stroke-width="1" stroke-dasharray="3,3"/>
+        <circle cx="155" cy="38" r="8" fill="rgba(245,159,0,.12)" stroke="#f59f00" stroke-width="1.5">
+          <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="1;.55;1" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="155" cy="38" r="3.5" fill="#f59f00"/>
+        <text x="165" y="33" font-size="9" fill="#f59f00" font-family="Inter,sans-serif">Novel event</text>
+        <text x="165" y="43" font-size="8" fill="rgba(245,159,0,.5)" font-family="Inter,sans-serif">H₁ hole detected</text>
+        <text x="16" y="186" font-size="8" fill="rgba(77,171,247,.4)" font-family="Inter,sans-serif">● Known terrain clusters</text>
+        <text x="195" y="186" font-size="8" fill="rgba(245,159,0,.4)" font-family="Inter,sans-serif">● OOD at max geodesic distance</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 09 ══ -->
+<div class="slide" id="s8">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:var(--blue)">BOTTLENECK DISTANCE</span></div>
+    <h2 class="headline">Every tile gets a <em>novelty score.</em></h2>
+    <ul class="bullets">
+      <li>Bottleneck distance between tile H₁ diagram and archive class diagrams.</li>
+      <li><strong>High distance</strong> = structurally unprecedented. Transmit first.</li>
+      <li class="bad"><strong>Low distance</strong> = seen before. Skip or defer.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div style="width:100%;max-width:320px">
+      <div class="compare-row">
+        <div class="ccard ccard-dim"><div class="ccard-label">Low novelty</div><div class="ccard-val">0.12</div><div style="font-size:11px;color:var(--text3);margin-top:8px">Deprioritise</div></div>
+        <div class="ccard ccard-blue"><div class="ccard-label">High novelty</div><div class="ccard-val">0.89</div><div style="font-size:11px;color:var(--blue);margin-top:8px">Transmit first ↑</div></div>
+      </div>
+      <div style="margin-top:16px;background:rgba(255,255,255,.02);border:.5px solid var(--border2);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--text3);line-height:1.7">
+        Bottleneck distance is the <span style="color:var(--blue)">max matching cost</span> between two persistence diagrams — immune to small perturbations, stable under noise.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 10 ══ -->
+<div class="slide" id="s9">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:var(--blue)">KNAPSACK SCHEDULER</span></div>
+    <h2 class="headline"><em>Maximum value</em> per byte of bandwidth.</h2>
+    <ul class="bullets">
+      <li>Ranks all tiles by novelty score descending.</li>
+      <li>Fills the 12MB contact window optimally — Knapsack algorithm.</li>
+      <li class="good"><strong>1.62× more novel tiles</strong> delivered vs random selection.</li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div style="text-align:center;width:100%">
+      <div class="bar-chart-wrap">
+        <div class="bar-item">
+          <div class="bar-val" style="color:var(--text3)">75</div>
+          <div class="bar bar-grey" id="bar-random"></div>
+          <div class="bar-label">Random</div>
+        </div>
+        <div class="bar-item">
+          <div class="bar-val" style="color:var(--blue)">122</div>
+          <div class="bar bar-blue" id="bar-topsat"></div>
+          <div class="bar-label">TOPSAT</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px">Novel tiles per 12MB contact window</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 11 — Interactive Pipeline ══ -->
+<div class="slide full" id="s10" style="overflow-y:auto;overflow-x:hidden;display:block !important;">
+  <div style="width:100%;max-width:860px;margin:0 auto;padding:10px 0 28px;display:flex;flex-direction:column;height:auto;min-height:100%;">
+    <h2 class="headline" style="font-size:28px;margin-bottom:20px;text-align:center">Pipeline / <em class="amber">Architecture</em></h2>
+
+    <!-- ── STAGE 0: Tile Capture ── -->
+    <div class="ipipe-stage" id="ips0">
+      <div class="ipipe-icon">📡</div>
+      <div class="ipipe-body">
+        <div class="ipipe-title">Tile Capture</div>
+        <div class="ipipe-sub">64×64 RGB patches · Sentinel-2 · 10m resolution · ~150 tiles per pass</div>
+      </div>
+      <div class="ipipe-badge" style="border-color:rgba(34,211,238,.35);color:#22d3ee;background:rgba(34,211,238,.08)">INPUT</div>
+    </div>
+    <div class="ipipe-connector"></div>
+
+    <!-- ── STAGE 1: RemoteCLIP ── -->
+    <div class="ipipe-stage" id="ips1">
+      <div class="ipipe-icon">🧠</div>
+      <div class="ipipe-body">
+        <div class="ipipe-title">RemoteCLIP Encode</div>
+        <div class="ipipe-sub">ViT-L-14 · 307M params · 768-d L2-normalised unit embedding · satellite-specific pretraining on LAION</div>
+        <div id="iembed-vis" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;max-width:340px;" id="imanifold"></div>
+        </div>
+      </div>
+      <div class="ipipe-badge" style="border-color:rgba(245,159,0,.35);color:#F59F00;background:rgba(245,159,0,.08)">768-d</div>
+    </div>
+    <div class="ipipe-connector"></div>
+
+    <!-- ── STAGE 2: Ripser ── -->
+    <div class="ipipe-stage" id="ips2">
+      <div class="ipipe-icon">🔬</div>
+      <div class="ipipe-body">
+        <div class="ipipe-title">Ripser H₁ — Persistent Homology</div>
+        <div class="ipipe-sub">Vietoris-Rips filtration · cosine metric · maxdim=1 · 2000 archive points · 1885 H₁ bars detected</div>
+        <div id="iripser-vis" style="display:none;margin-top:8px;font-family:var(--mono);font-size:11px;color:#F59F00;letter-spacing:.04em">
+          ⬡ Archive manifold formed · OOD tiles escape the topology
+        </div>
+      </div>
+      <div class="ipipe-badge" style="border-color:rgba(245,159,0,.35);color:#F59F00;background:rgba(245,159,0,.08)">1885 H₁ BARS</div>
+    </div>
+    <div class="ipipe-connector"></div>
+
+    <!-- ── STAGE 3: Bottleneck ── -->
+    <div class="ipipe-stage" id="ips3">
+      <div class="ipipe-icon">📊</div>
+      <div class="ipipe-body">
+        <div class="ipipe-title">Bottleneck Distance Scoring</div>
+        <div class="ipipe-sub">dist(PD_query, PD_archive) · high score = novel · threshold = 0.0054</div>
+        <div id="iscore-vis" style="display:none;margin-top:8px;">
+          <div style="display:flex;flex-direction:column;gap:5px;max-width:360px;font-size:11px;font-family:var(--mono);" id="iscore-list"></div>
+        </div>
+      </div>
+      <div class="ipipe-badge" style="border-color:rgba(34,211,238,.35);color:#22d3ee;background:rgba(34,211,238,.08)">NOVELTY SCORE</div>
+    </div>
+    <div class="ipipe-connector"></div>
+
+    <!-- ── STAGE 4: Knapsack ── -->
+    <div class="ipipe-stage" id="ips4">
+      <div class="ipipe-icon">🛰️</div>
+      <div class="ipipe-body">
+        <div class="ipipe-title">Knapsack Scheduler</div>
+        <div class="ipipe-sub">12 MB bandwidth budget · rank by novelty score · transmit highest-value tiles first</div>
+        <div id="iks-vis" style="display:none;margin-top:10px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;">
+            <span style="color:rgba(255,255,255,.35);font-family:var(--mono);letter-spacing:.06em;font-size:10px">BANDWIDTH</span>
+            <div style="flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;border:.5px solid rgba(255,255,255,.06)">
+              <div id="ibw-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#37B24D,#F59F00);transition:width 1.5s ease;border-radius:4px;box-shadow:0 0 8px rgba(55,178,77,.4)"></div>
+            </div>
+            <span id="ibw-pct" style="font-family:var(--mono);color:#F59F00;min-width:36px;font-size:11px">0%</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,.3);font-family:var(--mono);" id="iks-status">Selecting tiles…</div>
+        </div>
+      </div>
+      <div class="ipipe-badge" style="border-color:rgba(55,178,77,.35);color:#37B24D;background:rgba(55,178,77,.08)">12 MB</div>
+    </div>
+
+    <!-- ── RUN BUTTON ── -->
+    <div style="text-align:center;margin-top:18px;">
+      <button id="ipipe-run-btn" onclick="runIPipeline()"
+        style="padding:11px 32px;background:linear-gradient(135deg,rgba(245,159,0,.15),rgba(245,159,0,.05));
+        border:1px solid rgba(245,159,0,.5);border-radius:8px;color:#F59F00;
+        font-size:13px;font-weight:700;letter-spacing:.08em;cursor:pointer;
+        transition:all .2s;font-family:var(--font);
+        box-shadow:0 0 16px rgba(245,159,0,.1)">
+        ▶ RUN AGAIN
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ SLIDE — Tech Stack ══ -->
+<div class="slide full" id="s-techstack" style="overflow-y:auto;overflow-x:hidden;display:block !important;">
+  <div style="width:100%;max-width:960px;margin:0 auto;padding:10px 0 28px;display:flex;flex-direction:column;gap:20px;">
+
+    <div style="text-align:center;">
+      <h2 class="headline" style="font-size:28px;margin-bottom:4px;">Tech Stack. <em class="amber">Every layer.</em></h2>
+      <p style="font-size:12px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;">What TOPSAT is built on</p>
+    </div>
+
+    <!-- ROW 1: Data & Sensing -->
+    <div class="ts-section">
+      <div class="ts-section-label">📡 Data &amp; Sensing</div>
+      <div class="ts-grid">
+        <div class="ts-card ts-blue">
+          <div class="ts-icon">🛰️</div>
+          <div class="ts-name">Sentinel-2</div>
+          <div class="ts-desc">ESA multispectral · 10m resolution · 13 spectral bands · 64×64 tile patches</div>
+        </div>
+        <div class="ts-card ts-blue">
+          <div class="ts-icon">🗺️</div>
+          <div class="ts-name">EuroSAT Dataset</div>
+          <div class="ts-desc">27,000 labelled patches · 10 land-use classes · benchmark archive for novelty baseline</div>
+        </div>
+        <div class="ts-card ts-blue">
+          <div class="ts-icon">🌍</div>
+          <div class="ts-name">LAION-5B (RS subset)</div>
+          <div class="ts-desc">Remote sensing image-text pairs · pretraining corpus for RemoteCLIP alignment</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 2: ML / Embeddings -->
+    <div class="ts-section">
+      <div class="ts-section-label">🧠 ML / Embeddings</div>
+      <div class="ts-grid">
+        <div class="ts-card ts-purple">
+          <div class="ts-icon">🔷</div>
+          <div class="ts-name">RemoteCLIP ViT-L-14</div>
+          <div class="ts-desc">307M params · 768-d L2-unit embeddings · satellite-specific CLIP pretraining</div>
+          <div class="ts-badge">BACKBONE</div>
+        </div>
+        <div class="ts-card ts-purple">
+          <div class="ts-icon">🤗</div>
+          <div class="ts-name">Hugging Face Hub</div>
+          <div class="ts-desc">chendelong/RemoteCLIP weights · transformers + open_clip integration</div>
+        </div>
+        <div class="ts-card ts-purple">
+          <div class="ts-icon">🔥</div>
+          <div class="ts-name">PyTorch</div>
+          <div class="ts-desc">Inference pipeline · batch embedding extraction · CUDA / CPU autodetect</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 3: TDA -->
+    <div class="ts-section">
+      <div class="ts-section-label">🔬 Topological Data Analysis</div>
+      <div class="ts-grid">
+        <div class="ts-card ts-amber">
+          <div class="ts-icon">⬡</div>
+          <div class="ts-name">Ripser</div>
+          <div class="ts-desc">Vietoris-Rips persistent homology · H₁ bars · cosine metric · maxdim=1 · 2000 archive pts</div>
+          <div class="ts-badge" style="background:rgba(245,159,0,.15);color:#F59F00;border-color:rgba(245,159,0,.35)">CORE TDA</div>
+        </div>
+        <div class="ts-card ts-amber">
+          <div class="ts-icon">📐</div>
+          <div class="ts-name">Persim</div>
+          <div class="ts-desc">Bottleneck distance · persistence diagram comparison · novelty threshold = 0.0054</div>
+        </div>
+        <div class="ts-card ts-amber">
+          <div class="ts-icon">📊</div>
+          <div class="ts-name">Gudhi</div>
+          <div class="ts-desc">Supplementary TDA utilities · filtration construction · diagram manipulation</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 4: Scheduling + Eval -->
+    <div class="ts-section">
+      <div class="ts-section-label">⚙️ Scheduling &amp; Evaluation</div>
+      <div class="ts-grid">
+        <div class="ts-card ts-green">
+          <div class="ts-icon">🎒</div>
+          <div class="ts-name">Fractional Knapsack</div>
+          <div class="ts-desc">Custom Python · novelty-ranked tile selection · 12 MB budget · 1.62× yield lift</div>
+          <div class="ts-badge" style="background:rgba(55,178,77,.15);color:#37B24D;border-color:rgba(55,178,77,.35)">SCHEDULER</div>
+        </div>
+        <div class="ts-card ts-green">
+          <div class="ts-icon">📈</div>
+          <div class="ts-name">Scikit-learn</div>
+          <div class="ts-desc">ROC-AUC · bootstrap CI · Cohen's d · classification metrics · model evaluation</div>
+        </div>
+        <div class="ts-card ts-green">
+          <div class="ts-icon">🔢</div>
+          <div class="ts-name">NumPy / SciPy</div>
+          <div class="ts-desc">Embedding math · cosine distance · statistical testing · array pipelines</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 5: Infra -->
+    <div class="ts-section">
+      <div class="ts-section-label">🖥️ Infrastructure &amp; Visualisation</div>
+      <div class="ts-grid" style="grid-template-columns:repeat(4,1fr);">
+        <div class="ts-card ts-dim">
+          <div class="ts-icon">🐍</div>
+          <div class="ts-name">Python 3.10</div>
+          <div class="ts-desc">Core runtime · async pipeline orchestration</div>
+        </div>
+        <div class="ts-card ts-dim">
+          <div class="ts-icon">📓</div>
+          <div class="ts-name">Jupyter / Colab</div>
+          <div class="ts-desc">Experimentation · ablation notebooks</div>
+        </div>
+        <div class="ts-card ts-dim">
+          <div class="ts-icon">🌐</div>
+          <div class="ts-name">Vanilla HTML / JS</div>
+          <div class="ts-desc">Interactive demo · this presentation deck</div>
+        </div>
+        <div class="ts-card ts-dim">
+          <div class="ts-icon">📦</div>
+          <div class="ts-name">Matplotlib / Plotly</div>
+          <div class="ts-desc">Persistence diagrams · UMAP scatter · result charts</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ SLIDE 12 — All Results (merged 2×2) ══ -->
+<div class="slide full" id="s11">
+  <div class="text-panel" style="align-items:flex-start;text-align:left;padding:0;width:100%;height:100%;display:flex;flex-direction:column">
+    <h2 class="headline" style="font-size:26px;margin-bottom:16px">Four results. <em>One verdict.</em></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px;width:100%;flex:1">
+
+      <!-- Tile 1 — AUC -->
+      <div class="res-tile res-tile-blue"
+           style="opacity:0;transform:translateY(14px) scale(.97);transition:opacity .45s ease .1s,transform .45s cubic-bezier(.16,1,.3,1) .1s">
+        <div class="res-fig">0.873</div>
+        <div class="res-label">AUC — ROC Curve</div>
+        <div class="res-divider" style="background:rgba(77,171,247,.25)"></div>
+        <div class="res-sub">Bootstrap 95% CI: <strong>0.832 – 0.909</strong></div>
+        <div class="res-sub">Worst resample still above 0.832</div>
+      </div>
+
+      <!-- Tile 2 — Cohen's d -->
+      <div class="res-tile res-tile-green"
+           style="opacity:0;transform:translateY(14px) scale(.97);transition:opacity .45s ease .22s,transform .45s cubic-bezier(.16,1,.3,1) .22s">
+        <div class="res-fig" style="color:var(--teal)">1.529</div>
+        <div class="res-label">Cohen's d — Effect Size</div>
+        <div class="res-divider" style="background:rgba(55,178,77,.25)"></div>
+        <div class="res-sub">Distributions 1.5σ apart · near-zero overlap</div>
+        <div class="res-sub">d &gt; 0.8 = large · <strong>1.529 = enormous</strong></div>
+      </div>
+
+      <!-- Tile 3 — Yield Lift -->
+      <div class="res-tile res-tile-green"
+           style="opacity:0;transform:translateY(14px) scale(.97);transition:opacity .45s ease .34s,transform .45s cubic-bezier(.16,1,.3,1) .34s">
+        <div class="res-fig" style="color:var(--teal)">1.62×</div>
+        <div class="res-label">Scheduler Yield Lift</div>
+        <div class="res-divider" style="background:rgba(55,178,77,.25)"></div>
+        <div class="res-sub"><strong>122</strong> novel tiles vs 75 random — same 12MB</div>
+        <div class="res-sub">47 more novel observations per pass</div>
+      </div>
+
+      <!-- Tile 4 — TDA Gain -->
+      <div class="res-tile res-tile-blue"
+           style="opacity:0;transform:translateY(14px) scale(.97);transition:opacity .45s ease .46s,transform .45s cubic-bezier(.16,1,.3,1) .46s">
+        <div class="res-fig">+0.141</div>
+        <div class="res-label">TDA Gain over Cosine Baseline</div>
+        <div class="res-divider" style="background:rgba(77,171,247,.25)"></div>
+        <div class="res-sub">Baseline AUC 0.732 → TOPSAT <strong>0.873</strong></div>
+        <div class="res-sub">p = 4.63 × 10⁻³¹ — not noise</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE R1 — Results Dashboard ══ -->
+<div class="slide full" id="sR1">
+  <div class="text-panel" style="align-items:flex-start;text-align:left;padding:0;width:100%;height:100%;display:flex;flex-direction:column">
+    <h2 class="headline" style="font-size:24px;margin-bottom:10px">TOPSAT MVP — <em>Topology-Guided Downlink Prioritisation</em></h2>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;letter-spacing:1px">AUC=0.873 [0.832,0.909] · Cohen's d=1.529 · Scheduler lift=1.62×</div>
+    <div class="chart-slide-grid" style="flex:1">
+
+      <!-- ROC Curve -->
+      <div class="chart-card">
+        <div class="chart-title">ROC Curve — Bottleneck Novelty</div>
+        <div class="chart-sub">AUC=0.873 · thresh=0.0054 · PASS≥0.70</div>
+        <div class="chart-canvas-wrap">
+          <svg viewBox="0 0 260 180" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">
+            <defs>
+              <linearGradient id="roc-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#4DABF7" stop-opacity=".4"/>
+                <stop offset="100%" stop-color="#4DABF7" stop-opacity="0"/>
+              </linearGradient>
+              <clipPath id="roc-clip"><rect x="30" y="10" width="210" height="150"/></clipPath>
+            </defs>
+            <!-- Axes -->
+            <line x1="30" y1="160" x2="240" y2="160" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <line x1="30" y1="10" x2="30" y2="160" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <!-- Grid -->
+            <line x1="30" y1="85" x2="240" y2="85" stroke="rgba(255,255,255,.05)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <line x1="30" y1="35" x2="240" y2="35" stroke="rgba(255,255,255,.05)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <line x1="135" y1="10" x2="135" y2="160" stroke="rgba(255,255,255,.05)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <!-- Axis labels -->
+            <text x="135" y="175" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.4)" font-family="Inter,sans-serif">FPR</text>
+            <text x="12" y="90" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.4)" font-family="Inter,sans-serif" transform="rotate(-90,12,90)">TPR</text>
+            <text x="28" y="163" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+            <text x="28" y="85" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.5</text>
+            <text x="28" y="13" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">1</text>
+            <text x="30" y="170" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+            <text x="127" y="170" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.5</text>
+            <text x="230" y="170" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">1</text>
+            <!-- Diagonal -->
+            <line x1="30" y1="160" x2="240" y2="10" class="roc-diag"/>
+            <!-- PASS line -->
+            <line x1="30" y1="55" x2="240" y2="55" stroke="#37B24D" stroke-width="1" stroke-dasharray="5,4" opacity=".6"/>
+            <text x="237" y="52" font-size="8" fill="#37B24D" text-anchor="end" font-family="Inter,sans-serif">PASS 0.70</text>
+            <!-- Fill area -->
+            <polygon points="30,160 30,130 55,120 80,100 100,62 105,56 140,35 170,22 200,16 240,10 240,160" class="roc-fill" clip-path="url(#roc-clip)"/>
+            <!-- ROC path -->
+            <polyline points="30,160 30,130 55,120 80,100 100,62 105,56 140,35 170,22 200,16 240,10" class="roc-path draw-animate" style="--len:520" clip-path="url(#roc-clip)"/>
+            <!-- Threshold dot -->
+            <circle cx="100" cy="62" r="5" class="roc-dot"/>
+            <text x="108" y="58" font-size="8" fill="#F03E3E" font-family="Inter,sans-serif">thresh=0.0054</text>
+            <!-- AUC badge -->
+            <rect x="140" y="128" width="92" height="22" rx="5" fill="rgba(77,171,247,.12)" stroke="rgba(77,171,247,.3)" stroke-width=".5"/>
+            <text x="186" y="143" text-anchor="middle" font-size="10" fill="#4DABF7" font-weight="bold" font-family="Inter,sans-serif">AUC = 0.873</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Score Distribution -->
+      <div class="chart-card">
+        <div class="chart-title">Score Distribution</div>
+        <div class="chart-sub">Cohen's d=1.529 · p=4.63e-31</div>
+        <div class="chart-legend">
+          <span><span class="leg-dot" style="background:#4DABF7"></span>Archive (n=150)</span>
+          <span><span class="leg-dot" style="background:#FF7B9C"></span>OOD (n=150)</span>
+        </div>
+        <div class="chart-canvas-wrap">
+          <svg viewBox="0 0 260 160" xmlns="http://www.w3.org/2000/svg">
+            <defs><clipPath id="hist-clip"><rect x="28" y="5" width="220" height="135"/></clipPath></defs>
+            <line x1="28" y1="140" x2="248" y2="140" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <line x1="28" y1="5" x2="28" y2="140" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <!-- Grid -->
+            <line x1="28" y1="95" x2="248" y2="95" stroke="rgba(255,255,255,.05)" stroke-width=".5"/>
+            <line x1="28" y1="50" x2="248" y2="50" stroke="rgba(255,255,255,.05)" stroke-width=".5"/>
+            <!-- Y labels -->
+            <text x="25" y="143" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+            <text x="25" y="97" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">25</text>
+            <text x="25" y="52" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">50</text>
+            <!-- X axis labels -->
+            <text x="28" y="152" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+            <text x="90" y="152" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.004</text>
+            <text x="148" y="152" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.008</text>
+            <text x="206" y="152" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.012</text>
+            <!-- Archive bars (blue) — bins at 0,.001,.002,.003,.004,.005,.006 -->
+            <rect x="30" y="109" width="8" height="31" fill="#4DABF7" opacity=".75" class="bar-animated d1"/>
+            <rect x="42" y="138" width="8" height="2" fill="#4DABF7" opacity=".75" class="bar-animated d1"/>
+            <rect x="54" y="125" width="8" height="15" fill="#4DABF7" opacity=".75" class="bar-animated d2"/>
+            <rect x="66" y="134" width="8" height="6" fill="#4DABF7" opacity=".75" class="bar-animated d2"/>
+            <rect x="78" y="112" width="8" height="28" fill="#4DABF7" opacity=".75" class="bar-animated d3"/>
+            <rect x="90" y="107" width="8" height="33" fill="#4DABF7" opacity=".75" class="bar-animated d3"/>
+            <rect x="102" y="104" width="8" height="36" fill="#4DABF7" opacity=".75" class="bar-animated d4"/>
+            <rect x="114" y="110" width="8" height="30" fill="#4DABF7" opacity=".75" class="bar-animated d4"/>
+            <rect x="126" y="118" width="8" height="22" fill="#4DABF7" opacity=".75" class="bar-animated d5"/>
+            <rect x="138" y="108" width="8" height="32" fill="#4DABF7" opacity=".75" class="bar-animated d5"/>
+            <rect x="150" y="116" width="8" height="24" fill="#4DABF7" opacity=".75" class="bar-animated d6"/>
+            <rect x="162" y="130" width="8" height="10" fill="#4DABF7" opacity=".75" class="bar-animated d6"/>
+            <!-- OOD bars (pink) — bins near 0.009-0.012 -->
+            <rect x="78" y="130" width="8" height="10" fill="#FF7B9C" opacity=".75" class="bar-animated d2"/>
+            <rect x="90" y="128" width="8" height="12" fill="#FF7B9C" opacity=".75" class="bar-animated d3"/>
+            <rect x="102" y="129" width="8" height="11" fill="#FF7B9C" opacity=".75" class="bar-animated d3"/>
+            <rect x="114" y="122" width="8" height="18" fill="#FF7B9C" opacity=".75" class="bar-animated d4"/>
+            <rect x="162" y="108" width="8" height="32" fill="#FF7B9C" opacity=".75" class="bar-animated d4"/>
+            <rect x="174" y="107" width="8" height="33" fill="#FF7B9C" opacity=".75" class="bar-animated d4"/>
+            <rect x="186" y="112" width="8" height="28" fill="#FF7B9C" opacity=".75" class="bar-animated d5"/>
+            <rect x="198" y="95" width="8" height="45" fill="#FF7B9C" opacity=".75" class="bar-animated d5"/>
+            <rect x="210" y="120" width="8" height="20" fill="#FF7B9C" opacity=".75" class="bar-animated d6"/>
+            <rect x="234" y="135" width="8" height="5" fill="#FF7B9C" opacity=".75" class="bar-animated d6"/>
+            <!-- Threshold line -->
+            <line x1="138" y1="5" x2="138" y2="140" stroke="rgba(255,255,255,.6)" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <text x="140" y="15" font-size="7.5" fill="rgba(255,255,255,.7)" font-family="Inter,sans-serif">thresh</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Per-class Novelty -->
+      <div class="chart-card">
+        <div class="chart-title">Per-class Novelty Score</div>
+        <div class="chart-sub">Highway above threshold → topology is structural, not semantic</div>
+        <div class="chart-canvas-wrap">
+          <svg viewBox="0 0 260 160" xmlns="http://www.w3.org/2000/svg">
+            <line x1="28" y1="135" x2="252" y2="135" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <line x1="28" y1="5" x2="28" y2="135" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <!-- Y grid -->
+            <line x1="28" y1="85" x2="252" y2="85" stroke="rgba(255,255,255,.06)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <line x1="28" y1="45" x2="252" y2="45" stroke="rgba(255,255,255,.06)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <!-- Y labels -->
+            <text x="25" y="138" text-anchor="end" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+            <text x="25" y="88" text-anchor="end" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.005</text>
+            <text x="25" y="48" text-anchor="end" font-size="7" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.010</text>
+            <!-- Threshold line -->
+            <line x1="28" y1="81" x2="252" y2="81" stroke="rgba(255,255,255,.5)" stroke-width="1.2" stroke-dasharray="5,3"/>
+            <text x="254" y="79" font-size="7.5" fill="rgba(255,255,255,.6)" font-family="Inter,sans-serif">thresh</text>
+            <!-- ARCHIVE label -->
+            <text x="80" y="20" text-anchor="middle" font-size="9" fill="#4DABF7" font-family="Inter,sans-serif" font-weight="600">ARCHIVE</text>
+            <!-- OOD label -->
+            <text x="195" y="20" text-anchor="middle" font-size="9" fill="#FF7B9C" font-family="Inter,sans-serif" font-weight="600">OOD</text>
+            <!-- Separator -->
+            <line x1="145" y1="10" x2="145" y2="135" stroke="rgba(255,255,255,.1)" stroke-width=".7" stroke-dasharray="3,3"/>
+            <!-- Archive bars: SeaLake(33), Forest(54), Highway(86) - above threshold! -->
+            <rect x="38" y="93" width="22" height="42" fill="#4DABF7" opacity=".8" rx="2" class="bar-animated d1"/>
+            <text x="49" y="148" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)" font-family="Inter,sans-serif">SeaLake</text>
+            <rect x="70" y="81" width="22" height="54" fill="#37B24D" opacity=".8" rx="2" class="bar-animated d2"/>
+            <text x="81" y="148" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)" font-family="Inter,sans-serif">Forest</text>
+            <rect x="102" y="80" width="22" height="55" fill="#9b7fd4" opacity=".8" rx="2" class="bar-animated d3"/>
+            <text x="113" y="148" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)" font-family="Inter,sans-serif">Highway</text>
+            <!-- OOD bars: Industrial(60), AnnualCrop(20), River(76) -->
+            <rect x="150" y="74" width="22" height="61" fill="#F03E3E" opacity=".8" rx="2" class="bar-animated d4"/>
+            <text x="161" y="148" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)" font-family="Inter,sans-serif">Industrl</text>
+            <rect x="182" y="26" width="22" height="109" fill="#F59F00" opacity=".8" rx="2" class="bar-animated d5"/>
+            <text x="193" y="148" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)" font-family="Inter,sans-serif">AnnCrop</text>
+            <rect x="214" y="81" width="22" height="54" fill="#37b24d" opacity=".7" rx="2" class="bar-animated d6"/>
+            <text x="225" y="148" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)" font-family="Inter,sans-serif">River</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Knapsack scheduler -->
+      <div class="chart-card">
+        <div class="chart-title">Knapsack Scheduler @ 12.0 MB</div>
+        <div class="chart-sub">1.62× more novel tiles vs random</div>
+        <div class="chart-canvas-wrap">
+          <svg viewBox="0 0 260 160" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="ks-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#4DABF7"/>
+                <stop offset="100%" stop-color="#1864ab"/>
+              </linearGradient>
+            </defs>
+            <line x1="40" y1="135" x2="220" y2="135" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <line x1="40" y1="10" x2="40" y2="135" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+            <!-- Y grid -->
+            <line x1="40" y1="90" x2="220" y2="90" stroke="rgba(255,255,255,.06)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <line x1="40" y1="55" x2="220" y2="55" stroke="rgba(255,255,255,.06)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <line x1="40" y1="20" x2="220" y2="20" stroke="rgba(255,255,255,.06)" stroke-width=".5" stroke-dasharray="3,3"/>
+            <!-- Y labels -->
+            <text x="37" y="138" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+            <text x="37" y="93" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">50</text>
+            <text x="37" y="58" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">100</text>
+            <text x="37" y="23" text-anchor="end" font-size="7.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">140</text>
+            <!-- Random mean line -->
+            <line x1="40" y1="92" x2="220" y2="92" stroke="#F59F00" stroke-width="1.2" stroke-dasharray="5,3" opacity=".7"/>
+            <text x="218" y="89" font-size="7.5" fill="#F59F00" text-anchor="end" font-family="Inter,sans-serif">Random mean</text>
+            <!-- Random bar: 75 tiles → height = (75/140)*115 = 61.6 -->
+            <rect x="65" y="74" width="45" height="61" fill="rgba(100,120,150,0.55)" rx="4" class="bar-animated d1"/>
+            <text x="87" y="70" text-anchor="middle" font-size="11" font-weight="700" fill="rgba(200,210,220,.8)" font-family="Inter,sans-serif">75.1</text>
+            <text x="87" y="148" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,.4)" font-family="Inter,sans-serif">Random</text>
+            <!-- TOPSAT bar: 122 tiles → height = (122/140)*115 = 100 -->
+            <rect x="145" y="35" width="45" height="100" fill="url(#ks-grad)" rx="4" class="bar-animated d3" style="filter:drop-shadow(0 0 12px rgba(77,171,247,0.5))"/>
+            <text x="167" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#4DABF7" font-family="Inter,sans-serif">122.0</text>
+            <text x="167" y="148" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,.4)" font-family="Inter,sans-serif">TOPSAT</text>
+            <!-- Lift badge -->
+            <rect x="95" y="52" width="50" height="18" rx="5" fill="rgba(55,178,77,.15)" stroke="rgba(55,178,77,.4)" stroke-width=".7"/>
+            <text x="120" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#37B24D" font-family="Inter,sans-serif">1.62× ↑</text>
+          </svg>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE — Mission Control Demo ══ -->
+<div class="slide full" id="s-demo" style="overflow-y:auto;overflow-x:hidden;display:block !important;">
+<div style="width:100%;max-width:1280px;margin:0 auto;padding:8px 0 20px;display:flex;flex-direction:column;gap:12px;height:auto;">
+
+  <!-- Demo top bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid rgba(255,255,255,.05);">
+    <div>
+      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--blue);letter-spacing:3px;">TOPSAT</div>
+      <div style="font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">Mission Control · Interactive Demo</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:24px;">
+      <div style="display:flex;gap:20px;">
+        <div style="text-align:right;"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--blue);">0.873</div><div style="font-size:9px;color:var(--text3);letter-spacing:1px;">AUC</div></div>
+        <div style="text-align:right;"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--blue);">1.529</div><div style="font-size:9px;color:var(--text3);letter-spacing:1px;">Cohen's d</div></div>
+        <div style="text-align:right;"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--blue);">1.62×</div><div style="font-size:9px;color:var(--text3);letter-spacing:1px;">Scheduler lift</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:#5dcaa5;">
+        <div style="width:6px;height:6px;border-radius:50%;background:#5dcaa5;animation:demo-pulse 1.4s ease-in-out infinite;"></div>
+        <span id="demo-sat-status">SENTINEL-2 · LEO ORBIT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3-col grid -->
+  <div style="display:grid;grid-template-columns:240px 1fr 280px;gap:14px;align-items:start;">
+
+    <!-- LEFT: Archive + Pipeline -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- Archive selector -->
+      <div class="demo-panel">
+        <div class="demo-ph">
+          <span class="demo-ptitle">Archive Classes</span>
+          <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">Known terrain</span>
+        </div>
+        <div style="padding:10px 12px;">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:10px;line-height:1.5;">Select which classes the satellite <em style="color:var(--blue);">has already seen</em>. Everything else is OOD.</div>
+          <div id="demo-archive-list"></div>
+          <div style="margin-top:10px;">
+            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:6px;">Detected as novel →</div>
+            <div id="demo-ood-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <button id="demo-run-btn" style="width:100%;margin-top:12px;padding:10px;background:rgba(55,138,221,.15);border:0.5px solid rgba(55,138,221,.5);border-radius:9px;color:var(--blue);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;">▶ &nbsp;Run Detection</button>
+        </div>
+      </div>
+
+      <!-- Pipeline stages -->
+      <div class="demo-panel">
+        <div class="demo-ph"><span class="demo-ptitle">Pipeline</span></div>
+        <div style="padding:10px 12px;" id="demo-pipeline-stages"></div>
+      </div>
+
+    </div>
+
+    <!-- CENTER: Tile grid + log -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <div class="demo-panel">
+        <div class="demo-ph">
+          <span class="demo-ptitle">Incoming Tile Stream — 36 tiles · 12 MB budget</span>
+          <div style="display:flex;gap:5px;" id="demo-mode-toggle">
+            <button class="demo-mtbtn active" data-mode="topsat">TOPSAT</button>
+            <button class="demo-mtbtn" data-mode="random">Random</button>
+          </div>
+        </div>
+        <div style="padding:12px 14px;">
+          <div id="demo-tile-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;"></div>
+          <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);"><div style="width:8px;height:8px;border-radius:2px;background:rgba(55,138,221,.5);"></div>Archive</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);"><div style="width:8px;height:8px;border-radius:2px;background:rgba(208,88,88,.6);"></div>Novel (OOD)</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);"><div style="width:8px;height:8px;border-radius:2px;background:rgba(77,171,247,.8);"></div>Transmitted ↑</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);"><div style="width:8px;height:8px;border-radius:2px;background:rgba(255,255,255,.1);"></div>Skipped</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System log -->
+      <div class="demo-panel">
+        <div class="demo-ph">
+          <span class="demo-ptitle">System Log</span>
+          <span style="font-size:9px;color:var(--text3);font-family:var(--mono);" id="demo-log-time">—</span>
+        </div>
+        <div style="padding:10px 14px;font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.7;min-height:48px;" id="demo-phase-log">
+          <div style="color:var(--text3);">Select archive classes and press Run Detection to begin.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Stats -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- Contact window -->
+      <div class="demo-panel">
+        <div class="demo-ph"><span class="demo-ptitle">Contact Window</span></div>
+        <div style="padding:14px 16px;">
+          <div id="demo-cw-timer" style="font-family:var(--mono);font-size:34px;font-weight:600;color:var(--blue);letter-spacing:3px;text-align:center;text-shadow:0 0 20px rgba(77,171,247,.4);transition:color .3s;">10:00</div>
+          <div style="font-size:9px;color:var(--text3);letter-spacing:2px;text-align:center;margin-top:4px;text-transform:uppercase;font-family:var(--mono);">Remaining downlink time</div>
+          <div style="height:4px;background:rgba(255,255,255,.05);border-radius:2px;margin-top:10px;overflow:hidden;">
+            <div id="demo-cw-fill" style="height:100%;width:100%;border-radius:2px;background:linear-gradient(90deg,#185fa5,var(--blue));transition:width .5s linear;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bandwidth -->
+      <div class="demo-panel">
+        <div class="demo-ph"><span class="demo-ptitle">Bandwidth Used</span></div>
+        <div style="padding:12px 14px;">
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+              <span style="font-size:9px;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);color:var(--text3);">Random</span>
+              <span style="font-size:10px;font-family:var(--mono);"><span id="demo-rand-bw-used" style="color:var(--blue);">0.0</span><span style="color:var(--text3);"> / 12.0 MB</span></span>
+            </div>
+            <div style="height:7px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden;">
+              <div id="demo-rand-bw-bar" style="height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,#1e2e42,#3d5a78);transition:width .3s;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+              <span style="font-size:9px;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);color:var(--blue);">TOPSAT</span>
+              <span style="font-size:10px;font-family:var(--mono);"><span id="demo-ts-bw-used" style="color:var(--blue);">0.0</span><span style="color:var(--text3);"> / 12.0 MB</span></span>
+            </div>
+            <div style="height:7px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden;">
+              <div id="demo-ts-bw-bar" style="height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,#185fa5,var(--blue));box-shadow:0 0 6px rgba(77,171,247,.4);transition:width .3s;"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <div style="flex:1;background:rgba(255,255,255,.02);border:0.5px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;text-align:center;">
+              <div id="demo-rand-novel-ct" style="font-family:var(--mono);font-size:26px;font-weight:600;color:var(--text3);line-height:1;">0</div>
+              <div style="font-size:9px;color:var(--text3);letter-spacing:.8px;margin-top:4px;text-transform:uppercase;">Random novel</div>
+            </div>
+            <div style="flex:1;background:rgba(55,138,221,.05);border:0.5px solid rgba(55,138,221,.3);border-radius:10px;padding:10px;text-align:center;">
+              <div id="demo-ts-novel-ct" style="font-family:var(--mono);font-size:26px;font-weight:600;color:var(--blue);line-height:1;">0</div>
+              <div style="font-size:9px;color:var(--text3);letter-spacing:.8px;margin-top:4px;text-transform:uppercase;">TOPSAT novel</div>
+            </div>
+          </div>
+          <div id="demo-lift-callout" style="margin-top:10px;padding:10px 12px;background:rgba(55,138,221,.06);border:0.5px solid rgba(55,138,221,.3);border-radius:10px;text-align:center;opacity:0;transition:opacity .4s;">
+            <div id="demo-lift-val" style="font-family:var(--mono);font-size:28px;font-weight:600;color:var(--blue);text-shadow:0 0 18px rgba(77,171,247,.5);">—</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:4px;">Scheduler lift over random</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Score distribution -->
+      <div class="demo-panel">
+        <div class="demo-ph"><span class="demo-ptitle">Novelty Score Distribution</span></div>
+        <div style="padding:10px 14px;">
+          <canvas id="demo-dist-canvas" style="width:100%;height:72px;display:block;"></canvas>
+          <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:var(--text3);font-family:var(--mono);">
+            <span>← Low novelty</span><span>High novelty →</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key metrics -->
+      <div class="demo-panel">
+        <div class="demo-ph"><span class="demo-ptitle">Evaluation Metrics</span></div>
+        <div style="padding:10px 12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+            <div style="background:rgba(255,255,255,.02);border:0.5px solid rgba(255,255,255,.06);border-radius:8px;padding:9px 10px;text-align:center;"><div style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--blue);">0.873</div><div style="font-size:9px;color:var(--text3);letter-spacing:.8px;margin-top:3px;">AUC [0.832, 0.909]</div></div>
+            <div style="background:rgba(255,255,255,.02);border:0.5px solid rgba(255,255,255,.06);border-radius:8px;padding:9px 10px;text-align:center;"><div style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--blue);">1.529</div><div style="font-size:9px;color:var(--text3);letter-spacing:.8px;margin-top:3px;">Cohen's d</div></div>
+            <div style="background:rgba(255,255,255,.02);border:0.5px solid rgba(255,255,255,.06);border-radius:8px;padding:9px 10px;text-align:center;"><div style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--blue);">+0.141</div><div style="font-size:9px;color:var(--text3);letter-spacing:.8px;margin-top:3px;">Topology gain</div></div>
+            <div style="background:rgba(255,255,255,.02);border:0.5px solid rgba(255,255,255,.06);border-radius:8px;padding:9px 10px;text-align:center;"><div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--blue);">4.6e-31</div><div style="font-size:9px;color:var(--text3);letter-spacing:.8px;margin-top:3px;">p-value</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SLIDE 16 ══ -->
+<!-- ══ SLIDE 16 — BIG REVEAL: The Honest Constraint ══ -->
+<div class="slide full" id="s15" style="display:block !important; overflow:hidden; position:relative;">
+
+  <!-- Animated mini-sun crossing the screen -->
+  <div class="mini-sun-wrap" id="miniSunWrap">
+    <div class="mini-sun" id="miniSun"></div>
+  </div>
+
+  <!-- Reveal content -->
+  <div class="reveal-inner">
+
+    <!-- Top label -->
+    <div class="reveal-eyebrow">THE HONEST CONSTRAINT</div>
+
+    <!-- Hero headline -->
+    <div class="reveal-hero">
+      But 90% of satellites<br>
+      launching today<br>
+      look like <em class="reveal-this">this.</em>
+    </div>
+
+    <!-- Main body: constraint table LEFT + cubesat widget RIGHT -->
+    <div class="reveal-body">
+
+      <!-- LEFT: constraint rows -->
+      <div class="reveal-constraints">
+        <div class="constraint-row cr-red">
+          <span class="cr-key">Params: <strong style="color:var(--red)">307,000,000</strong></span>
+          <span class="cr-sep">—</span>
+          <span class="cr-val">CubeSat compute limit: ~10M</span>
+        </div>
+        <div class="constraint-row cr-red">
+          <span class="cr-key">CPU inference: <strong style="color:var(--red)">3,250 ms/tile</strong></span>
+          <span class="cr-sep">—</span>
+          <span class="cr-val">target: &lt;50 ms</span>
+        </div>
+        <div class="constraint-row cr-red">
+          <span class="cr-key">Memory: <strong style="color:var(--red)">~1.2 GB</strong></span>
+          <span class="cr-sep">—</span>
+          <span class="cr-val">CubeSat RAM: 256 MB</span>
+        </div>
+
+        <!-- Amber punchline -->
+        <div class="reveal-punchline">But the dream's not over.</div>
+      </div>
+
+      <!-- RIGHT: original cubesat widget -->
+      <div class="reveal-widget">
+        <div class="cubesat-frame reveal-cubesat">
+          <div class="slot">Camera Module</div>
+          <div class="slot overload">RemoteCLIP —<br>Overload</div>
+          <div class="slot">3U CubeSat<br>Battery</div>
+        </div>
+      </div>
+
+    </div><!-- /reveal-body -->
+  </div><!-- /reveal-inner -->
+</div>
+
+<style>
+/* ── BIG REVEAL SLIDE ── */
+#s15{background:transparent}
+#cosmos.stars-boost .star{animation:twinkle-boost var(--d,4s) ease-in-out infinite var(--dl,0s)}
+@keyframes twinkle-boost{0%,100%{opacity:.2;transform:scale(1)}50%{opacity:.8;transform:scale(1.6)}}
+
+/* Mini sun animation */
+.mini-sun-wrap{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;overflow:hidden;z-index:2
+}
+.mini-sun{
+  position:absolute;
+  top:18%;left:-60px;
+  width:38px;height:38px;
+  border-radius:50%;
+  background:radial-gradient(circle at 38% 38%,#fff9c4,#FFD600 30%,#FF8F00 65%,rgba(255,111,0,.0) 100%);
+  box-shadow:0 0 18px 8px rgba(255,214,0,.55),0 0 40px 18px rgba(255,160,0,.25);
+  animation:sun-cross 7s linear infinite;
+  opacity:0
+}
+@keyframes sun-cross{
+  0%  {left:-60px;opacity:0}
+  4%  {opacity:1}
+  95% {opacity:.85}
+  100%{left:calc(100% + 60px);opacity:0}
+}
+#s15.active .mini-sun{animation:sun-cross 7s linear infinite}
+
+/* Inner layout */
+.reveal-inner{
+  width:100%;max-width:1100px;margin:0 auto;
+  padding:24px 56px 16px;
+  display:flex;flex-direction:column;gap:18px;
+  position:relative;z-index:3
+}
+
+/* Eyebrow */
+.reveal-eyebrow{
+  font-size:10px;font-weight:700;letter-spacing:4px;
+  text-transform:uppercase;color:var(--red);
+  opacity:0;transform:translateY(-8px);
+  transition:opacity .4s ease,transform .4s ease
+}
+#s15.active .reveal-eyebrow{opacity:1;transform:translateY(0);transition-delay:.05s}
+
+/* Hero headline */
+.reveal-hero{
+  font-size:clamp(36px,5.5vw,64px);font-weight:900;line-height:1.12;
+  color:var(--white);
+  opacity:0;transform:translateY(18px);
+  transition:opacity .55s cubic-bezier(.16,1,.3,1),transform .55s cubic-bezier(.16,1,.3,1)
+}
+#s15.active .reveal-hero{opacity:1;transform:translateY(0);transition-delay:.12s}
+.reveal-this{
+  font-style:normal;
+  color:var(--purple);
+  text-shadow:0 0 40px rgba(155,127,212,.5),0 0 80px rgba(155,127,212,.2)
+}
+
+/* Body row */
+.reveal-body{
+  display:flex;align-items:flex-start;gap:48px;
+  opacity:0;transform:translateY(14px);
+  transition:opacity .5s ease,transform .5s ease
+}
+#s15.active .reveal-body{opacity:1;transform:translateY(0);transition-delay:.35s}
+
+/* Constraint rows */
+.reveal-constraints{
+  flex:1;display:flex;flex-direction:column;gap:10px
+}
+.constraint-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 16px;border-radius:8px;
+  border:1px solid rgba(240,62,62,.2);
+  background:rgba(240,62,62,.05);
+  font-family:var(--mono);font-size:12.5px;
+  color:var(--text2);flex-wrap:wrap
+}
+.cr-key{color:var(--text)}
+.cr-sep{color:var(--text3)}
+.cr-val{color:var(--text2)}
+
+/* Ground station block */
+.ground-block{
+  margin-top:8px;
+  padding:12px 18px;
+  border-left:2px solid rgba(77,171,247,.3);
+  background:rgba(77,171,247,.04);
+  border-radius:0 8px 8px 0;
+  font-size:13px;line-height:1.6;color:var(--text2)
+}
+.ground-block strong{color:var(--text)}
+
+/* Amber punchline */
+.reveal-punchline{
+  margin-top:14px;
+  font-size:15px;font-weight:700;
+  color:var(--amber);
+  letter-spacing:.3px;
+  text-shadow:0 0 20px rgba(245,159,0,.35)
+}
+
+/* Widget panel */
+.reveal-widget{
+  flex-shrink:0;
+  display:flex;align-items:flex-start;justify-content:center;
+  background:var(--card);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:16px;
+  box-shadow:0 30px 60px -15px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(24px);
+  padding:14px 24px 18px;
+  margin-top:-56px;
+  align-self:flex-start;
+}
+.reveal-cubesat{
+  border-color:var(--red)!important;
+  width:150px;height:268px;gap:12px
+}
+.reveal-cubesat .slot{height:56px;font-size:11px}
+</style>
+
+<!-- ══ SLIDE 17 ══ -->
+<div class="slide" id="s16">
+  <div class="text-panel">
+    <div class="scene-tag" style="font-size:13px;font-weight:900;letter-spacing:3px;color:inherit"><span style="color:#fff">THE</span> <span style="color:var(--blue)">FUTURE</span></div>
+    <h2 class="headline">Eject RemoteCLIP. Insert <em>TopoEncoder.</em></h2>
+    <ul class="bullets">
+      <li>5M parameter CNN backbone — down from 307M.</li>
+      <li class="good">128-D hyperspherical output trained with <strong>topological loss.</strong></li>
+      <li class="good">&lt;50ms per tile on Jetson Orin NX. Fits the CubeSat envelope.</li>
+      <li class="good"><em style="font-style:normal;color:var(--amber);font-weight:700">TopoEncoder — Edge-Native Engine</em></li>
+    </ul>
+  </div>
+  <div class="visual-panel">
+    <div class="cubesat-frame" style="border-color:var(--teal)">
+      <div class="slot">Camera Module</div>
+      <div class="slot topo">TopoEncoder (5M params)</div>
+      <div class="slot">Jetson Orin NX</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE 26 ══ -->
+<div class="slide full" id="s25">
+  <div class="arch-banner"></div>
+  <div class="text-panel">
+    <h2 class="headline"><em class="amber">Spectral in. Decision out.</em></h2>
+    <div style="width:100%;max-width:780px;margin-top:16px">
+      <div class="pipe-row">
+        <div class="pipe-box-arch"><div class="pipe-n-arch">RAW</div><div class="pipe-title">Spectral tile</div><div class="pipe-sub">80×80 · 13-band</div></div>
+        <div class="pipe-arr">→</div>
+        <div class="pipe-box-arch"><div class="pipe-n-arch">CNN</div><div class="pipe-title">TopoEncoder</div><div class="pipe-sub">5M params · DW-Sep</div></div>
+        <div class="pipe-arr">→</div>
+        <div class="pipe-box-arch"><div class="pipe-n-arch">ℝ¹²⁸</div><div class="pipe-title">Hypersphere</div><div class="pipe-sub">L2-norm · Topo-trained</div></div>
+        <div class="pipe-arr">→</div>
+        <div class="pipe-box-arch"><div class="pipe-n-arch">TDA</div><div class="pipe-title">Ripser H₁</div><div class="pipe-sub">7.4ms · window=80</div></div>
+        <div class="pipe-arr">→</div>
+        <div class="pipe-box-arch"><div class="pipe-n-arch">OUT</div><div class="pipe-title">Novelty score</div><div class="pipe-sub">Bottleneck ∆</div></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap">
+        <div style="background:var(--amber-dim);border:.5px solid rgba(245,159,0,.3);border-radius:8px;padding:10px 20px;font-size:13px;color:var(--amber);font-weight:600">
+          Total budget: &lt;50ms · &lt;10W · &lt;500MB RAM
+        </div>
+        <div style="background:rgba(55,178,77,.08);border:.5px solid rgba(55,178,77,.3);border-radius:8px;padding:10px 20px;font-size:13px;color:var(--teal);font-weight:600">
+          100% edge autonomy — no ground station
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SLIDE R2 — UMAP + Training Curves ══ -->
+<div class="slide full" id="sR2">
+  <div class="text-panel" style="align-items:flex-start;text-align:left;padding:0;width:100%;height:100%;display:flex;flex-direction:column">
+    <h2 class="headline" style="font-size:24px;margin-bottom:8px">TopoEncoder — <em>UMAP Embeddings & Training Curves</em></h2>
+    <div style="display:flex;gap:14px;flex:1;min-height:0;width:100%">
+
+      <!-- UMAP panel -->
+      <div class="chart-card" style="flex:1.2">
+        <div class="chart-title">UMAP of TopoEncoder Embeddings (cosine metric)</div>
+        <div class="chart-legend" style="margin-bottom:6px">
+          <span><span class="leg-dot" style="background:#F59F00"></span>AnnualCrop</span>
+          <span><span class="leg-dot" style="background:#37B24D"></span>Forest</span>
+          <span><span class="leg-dot" style="background:#74C0FC"></span>HerbVeg</span>
+          <span><span class="leg-dot" style="background:#F03E3E"></span>Highway</span>
+          <span><span class="leg-dot" style="background:#9b7fd4"></span>Industrial</span>
+          <span><span class="leg-dot" style="background:#aaa"></span>Pasture</span>
+          <span><span class="leg-dot" style="background:#FF9ECD"></span>PermCrop</span>
+          <span><span class="leg-dot" style="background:#E0BB00"></span>Residential</span>
+          <span><span class="leg-dot" style="background:#69D2B1"></span>River</span>
+          <span><span class="leg-dot" style="background:#00CFE8"></span>SeaLake</span>
+        </div>
+        <div class="chart-canvas-wrap" id="umap-wrap">
+          <!-- UMAP rendered by JS below -->
+          <svg id="umap-svg" viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </div>
+
+      <!-- Training curves -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+        <div class="chart-card" style="flex:1">
+          <div class="chart-title">L_contrastive (NT-Xent)</div>
+          <div class="chart-legend">
+            <span><span class="leg-line" style="background:#4DABF7"></span>Train</span>
+            <span><span class="leg-line" style="background:#F59F00;border-top:1px dashed #F59F00"></span>Val</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <svg viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">
+              <line x1="18" y1="70" x2="210" y2="70" stroke="rgba(255,255,255,.1)" stroke-width=".7"/>
+              <line x1="18" y1="5" x2="18" y2="70" stroke="rgba(255,255,255,.1)" stroke-width=".7"/>
+              <text x="15" y="73" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+              <text x="15" y="38" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">1</text>
+              <text x="15" y="10" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">2</text>
+              <text x="114" y="78" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">Epoch</text>
+              <!-- Train line: starts at 2.0 drops to 0.4 over 30 epochs -->
+              <polyline points="18,5 28,14 38,19 48,23 58,28 68,32 78,36 88,37 98,36 108,37 118,38 128,40 138,41 148,42 158,44 168,45 178,46 188,47 198,48 208,50" fill="none" stroke="#4DABF7" stroke-width="1.8" stroke-linecap="round" class="draw-animate" style="--len:300"/>
+              <!-- Val line: noisier -->
+              <polyline points="18,14 28,24 38,26 48,30 58,34 68,40 78,36 88,40 98,42 108,41 118,44 128,43 138,46 148,46 158,48 168,50 178,50 188,51 198,52 208,53" fill="none" stroke="#F59F00" stroke-width="1.5" stroke-dasharray="4,2.5" stroke-linecap="round" class="draw-animate delay2" style="--len:300"/>
+            </svg>
+          </div>
+        </div>
+        <div class="chart-card" style="flex:1">
+          <div class="chart-title">L_topo (proxy)</div>
+          <div class="chart-canvas-wrap">
+            <svg viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">
+              <line x1="18" y1="70" x2="210" y2="70" stroke="rgba(255,255,255,.1)" stroke-width=".7"/>
+              <line x1="18" y1="5" x2="18" y2="70" stroke="rgba(255,255,255,.1)" stroke-width=".7"/>
+              <text x="15" y="38" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+              <text x="15" y="73" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">-.5</text>
+              <text x="15" y="10" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">.25</text>
+              <!-- Zero line -->
+              <line x1="18" y1="38" x2="210" y2="38" stroke="rgba(255,255,255,.07)" stroke-width=".5" stroke-dasharray="3,3"/>
+              <!-- Train line descends from +0.25 into negative -->
+              <polyline points="18,10 28,14 38,22 48,32 58,38 68,45 78,50 88,53 98,56 108,58 118,60 128,62 138,63 148,64 158,65 168,65 178,66 188,66 198,67 208,68" fill="none" stroke="#4DABF7" stroke-width="1.8" stroke-linecap="round" class="draw-animate" style="--len:300"/>
+              <!-- Val line with spike -->
+              <polyline points="18,19 28,22 38,30 48,38 58,44 68,50 78,52 88,35 98,54 108,57 118,60 128,62 138,64 148,65 158,66 168,67 178,68 188,68 198,68 208,69" fill="none" stroke="#F59F00" stroke-width="1.5" stroke-dasharray="4,2.5" stroke-linecap="round" class="draw-animate delay2" style="--len:300"/>
+            </svg>
+          </div>
+        </div>
+        <div class="chart-card" style="flex:1">
+          <div class="chart-title">L_total</div>
+          <div class="chart-canvas-wrap">
+            <svg viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">
+              <line x1="18" y1="70" x2="210" y2="70" stroke="rgba(255,255,255,.1)" stroke-width=".7"/>
+              <line x1="18" y1="5" x2="18" y2="70" stroke="rgba(255,255,255,.1)" stroke-width=".7"/>
+              <text x="15" y="73" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">0</text>
+              <text x="15" y="38" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">1</text>
+              <text x="15" y="10" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.3)" font-family="Inter,sans-serif">2</text>
+              <!-- Train line total -->
+              <polyline points="18,5 28,13 38,18 48,22 58,27 68,31 78,35 88,36 98,35 108,37 118,38 128,40 138,41 148,43 158,44 168,45 178,46 188,47 198,49 208,51" fill="none" stroke="#4DABF7" stroke-width="1.8" stroke-linecap="round" class="draw-animate" style="--len:300"/>
+              <!-- Val -->
+              <polyline points="18,13 28,22 38,25 48,29 58,33 68,39 78,35 88,39 98,41 108,40 118,43 128,41 138,45 148,46 158,47 168,49 178,50 188,51 198,52 208,53" fill="none" stroke="#F59F00" stroke-width="1.5" stroke-dasharray="4,2.5" stroke-linecap="round" class="draw-animate delay2" style="--len:300"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ CLOSING SLIDE ══ -->
+<div class="slide full closing-slide" id="s-close">
+  <div class="close-inner">
+    <!-- Left: orbital art -->
+    <div class="close-art">
+      <div class="close-rings">
+        <div class="cring cr1"></div>
+        <div class="cring cr2"></div>
+        <div class="cring cr3"></div>
+        <div class="cring-core">
+          <div class="close-sat">🛰️</div>
+        </div>
+        <div class="cring-beam"></div>
+      </div>
+    </div>
+    <!-- Right: content -->
+    <div class="close-content">
+      <div class="close-eyebrow">MISSION COMPLETE</div>
+      <h2 class="close-title">Thank You</h2>
+      <div class="close-subtitle">TOPSAT — Every byte, intentional.</div>
+      <div class="close-stats">
+        <div class="cstat"><span class="cstat-n">0.873</span><div class="cstat-l">AUC</div></div>
+        <div class="cstat-div"></div>
+        <div class="cstat"><span class="cstat-n" style="color:var(--teal)">1.62×</span><div class="cstat-l">Yield Lift</div></div>
+        <div class="cstat-div"></div>
+        <div class="cstat"><span class="cstat-n" style="color:var(--amber)">+0.141</span><div class="cstat-l">TDA Gain</div></div>
+        <div class="cstat-div"></div>
+        <div class="cstat"><span class="cstat-n" style="color:var(--purple)">1.529</span><div class="cstat-l">Cohen's d</div></div>
+      </div>
+      <div class="close-quote">"To transmit the observations humanity has never seen before."</div>
+      <div class="close-team">
+        <div class="close-team-label">Built with</div>
+        <div class="close-pills">
+          <span class="cpill">TDA · Persistent Homology</span>
+          <span class="cpill">Ripser H₁</span>
+          <span class="cpill">TopoEncoder CNN</span>
+          <span class="cpill">Knapsack Scheduler</span>
+          <span class="cpill">Jetson Orin NX</span>
+        </div>
+      </div>
+      <div class="close-nav-row">
+        <button class="close-btn" onclick="go(0)">↺ Restart from intro</button>
+        <button class="close-btn close-btn-primary" onclick="go(1)">↺ Replay deck</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /viewport -->
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-left">
+
+    <div class="progress-track">
+      <div class="progress-fill" id="prog"></div>
+    </div>
+    <div id="dot-nav"></div>
+  </div>
+  <div class="footer-right">
+    <span class="slide-counter" id="counter">1 / 20</span>
+    <button class="nav-btn" id="btn-prev">← Prev</button>
+    <button class="nav-btn primary" id="btn-next">Next →</button>
+  </div>
+</footer>
+
+</div><!-- /app -->
+
+<script>
+// ── STARS & SHOOTING STARS ──
+const cosmos = document.getElementById('cosmos');
+for(let i=0;i<120;i++){
+  const s=document.createElement('div');s.className='star';
+  const sz=Math.random()*2.2+.3;
+  s.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${3+Math.random()*5}s;--dl:${Math.random()*5}s;`;
+  cosmos.appendChild(s);
+}
+// Shooting stars
+function spawnShooter(){
+  const el=document.createElement('div');el.className='shooter';
+  el.style.cssText=`top:${Math.random()*60}%;left:${Math.random()*80}%`;
+  cosmos.appendChild(el);
+  setTimeout(()=>el.remove(),1200);
+}
+setInterval(spawnShooter,3800);
+
+// ── SLIDE ENGINE ──
+const slides=document.querySelectorAll('.slide');
+const N=slides.length;
+let cur=0,playing=false,timer=null;
+
+const prog=document.getElementById('prog');
+const counter=document.getElementById('counter');
+
+const tabDeck=document.getElementById('tab-deck');
+const tabDemo=document.getElementById('tab-demo');
+const tabFuture=document.getElementById('tab-future');
+
+// Dot nav
+const dotNav=document.getElementById('dot-nav');
+const dots=[];
+slides.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot'+(i===0?' dot-active':'');
+  d.title='Slide '+(i+1);
+  d.addEventListener('click',()=>go(i));
+  dotNav.appendChild(d);
+  dots.push(d);
+});
+
+function updateDots(){
+  dots.forEach((d,i)=>d.className='dot'+(i===cur?' dot-active':''));
+}
+
+function updateTabs(){
+  const isDemo=cur===14;
+  const isFuture=cur>=15;
+  const isPitchdeck=cur<14;
+  tabDeck.className='stab'+(isPitchdeck?' active-deck':'');
+  if(tabDemo)tabDemo.className='stab'+(isDemo?' active-demo':'');
+  if(tabFuture)tabFuture.className='stab'+(isFuture?' active-future':'');
+}
+
+function renderUMAP(){
+  const svg=document.getElementById('umap-svg');
+  if(!svg)return;
+  const clusters=[
+    {cx:120,cy:60,sx:40,sy:30,color:'#F59F00',n:180},
+    {cx:80,cy:50,sx:30,sy:35,color:'#37B24D',n:150},
+    {cx:100,cy:100,sx:35,sy:30,color:'#74C0FC',n:140},
+    {cx:130,cy:110,sx:20,sy:20,color:'#F03E3E',n:80},
+    {cx:90,cy:130,sx:25,sy:20,color:'#9b7fd4',n:70},
+    {cx:70,cy:110,sx:30,sy:25,color:'#aaa',n:130},
+    {cx:110,cy:140,sx:25,sy:18,color:'#FF9ECD',n:90},
+    {cx:75,cy:150,sx:28,sy:18,color:'#E0BB00',n:100},
+    {cx:145,cy:150,sx:22,sy:18,color:'#69D2B1',n:110},
+    {cx:225,cy:110,sx:30,sy:22,color:'#00CFE8',n:160},
+  ];
+  let html='';
+  clusters.forEach((c,ci)=>{
+    for(let i=0;i<Math.min(c.n,60);i++){
+      const x=c.cx+(Math.random()-.5)*2*c.sx;
+      const y=c.cy+(Math.random()-.5)*2*c.sy;
+      const r=Math.random()<.5?1.5:2;
+      const delay=(ci*40+i*8);
+      html+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${c.color}" opacity="0" class="dot-animated" style="animation-delay:${delay}ms;animation-duration:0.2s"/>`;
+    }
+  });
+  html+='<text x="150" y="218" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.35)" font-family="Inter,sans-serif">UMAP-1</text>';
+  html+='<text x="10" y="115" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.35)" font-family="Inter,sans-serif" transform="rotate(-90,10,115)">UMAP-2</text>';
+  svg.innerHTML=html;
+}
+
+function triggerEffects(i){
+  if(i===6){
+    setTimeout(()=>{
+      const bars=[['zb1','17%'],['zb2','21%'],['zb3','89%']];
+      bars.forEach(([id,w],j)=>setTimeout(()=>{const el=document.getElementById(id);if(el)el.style.width=w;},j*280));
+    },500);
+  }
+  if(slides[i]&&slides[i].id==='sR2'){setTimeout(renderUMAP,200);}
+  if(cosmos)cosmos.classList.toggle('stars-boost',slides[i]&&slides[i].id==='s15');
+}
+
+// Swipe support
+let touchX=null;
+document.addEventListener('touchstart',e=>{touchX=e.touches[0].clientX;});
+document.addEventListener('touchend',e=>{
+  if(touchX===null)return;
+  const dx=e.changedTouches[0].clientX-touchX;
+  if(Math.abs(dx)>50){dx<0?go(cur+1):go(cur-1);}
+  touchX=null;
+});
+
+function go(n){
+  slides[cur].classList.remove('active');
+  cur=(n+N)%N;
+  slides[cur].classList.add('active');
+  // Reset scroll for scrollable slides
+  slides[cur].scrollTop=0;
+  prog.style.width=((cur+1)/N*100)+'%';
+  counter.textContent=(cur+1)+' / '+N;
+  updateTabs();
+  updateDots();
+  triggerEffects(cur);
+  // Flash transition
+  const flash=document.getElementById('flash');
+  if(flash){flash.style.opacity='.18';setTimeout(()=>flash.style.opacity='0',80);}
+  if(playing)resetTimer();
+}
+
+function resetTimer(){clearInterval(timer);timer=setInterval(()=>go(cur+1),6000);}
+
+document.getElementById('btn-next').addEventListener('click',()=>go(cur+1));
+document.getElementById('btn-prev').addEventListener('click',()=>go(cur-1));
+
+
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();go(cur+1);}
+  if(e.key==='ArrowLeft'){e.preventDefault();go(cur-1);}
+  if(e.key==='f'||e.key==='F'){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}
+  // Number keys 1-9 for quick jump
+  const n=parseInt(e.key);
+  if(n>=1&&n<=9){go(n-1);}
+});
+
+// Keyboard hint
+const hint=document.getElementById('kb-hint');
+if(hint){
+  setTimeout(()=>{hint.style.opacity='1';setTimeout(()=>{hint.style.opacity='0';},3000);},1500);
+}
+
+// ── INTERACTIVE PIPELINE (Slide 11) ──────────────────────────────
+let iPipeRunning=false;
+const ISCORES=[
+  {name:'SeaLake',val:.0032,novel:false,col:'#4DABF7'},
+  {name:'Forest',val:.0054,novel:false,col:'#37B24D'},
+  {name:'Highway',val:.0055,novel:true,col:'#94a3b8'},
+  {name:'Industrial',val:.0063,novel:true,col:'#F59F00'},
+  {name:'AnnualCrop',val:.0098,novel:true,col:'#F59F00'},
+  {name:'River',val:.0051,novel:true,col:'#22d3ee'},
+];
+
+async function runIPipeline(){
+  if(iPipeRunning)return;
+  iPipeRunning=true;
+  const btn=document.getElementById('ipipe-run-btn');
+  btn.textContent='⏳ RUNNING…';btn.disabled=true;
+
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const stages=['ips0','ips1','ips2','ips3','ips4'];
+
+  // reset visuals
+  ['iembed-vis','iripser-vis','iscore-vis','iks-vis'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display='none';
+  });
+  const ibwFill=document.getElementById('ibw-fill');
+  const ibwPct=document.getElementById('ibw-pct');
+  const iksStatus=document.getElementById('iks-status');
+  if(ibwFill){ibwFill.style.width='0%';}
+  if(ibwPct){ibwPct.textContent='0%';}
+  if(iksStatus){iksStatus.textContent='Selecting tiles…';iksStatus.style.color='rgba(255,255,255,.3)';}
+
+  for(let i=0;i<stages.length;i++){
+    stages.forEach((id,j)=>{
+      const el=document.getElementById(id);if(!el)return;
+      el.className='ipipe-stage'+(j<i?' ipipe-done':j===i?' ipipe-active':'');
+    });
+
+    if(i===1){
+      const ev=document.getElementById('iembed-vis');
+      const mf=document.getElementById('imanifold');
+      if(ev&&mf){
+        ev.style.display='block';mf.innerHTML='';
+        const cols=['#4DABF7','#37B24D','#94a3b8','#F59F00','#F59F00','#22d3ee'];
+        for(let d=0;d<42;d++){
+          const dot=document.createElement('div');
+          dot.style.cssText=`width:9px;height:9px;border-radius:50%;background:${cols[d%cols.length]};opacity:${d>27?.45:1};transition:all .4s;`;
+          mf.appendChild(dot);
+        }
+      }
+    }
+    if(i===2){
+      const rv=document.getElementById('iripser-vis');
+      if(rv)rv.style.display='block';
+    }
+    if(i===3){
+      const sv=document.getElementById('iscore-vis');
+      const sl=document.getElementById('iscore-list');
+      if(sv&&sl){
+        sv.style.display='block';sl.innerHTML='';
+        ISCORES.forEach((s,idx)=>{
+          setTimeout(()=>{
+            const row=document.createElement('div');
+            row.style.cssText='display:flex;align-items:center;gap:8px;';
+            const pct=Math.min(100,(s.val/0.012)*100);
+            const novelCol=s.novel?'#F59F00':'#37B24D';
+            row.innerHTML=`
+              <span style="min-width:78px;color:${s.col};font-size:11px">${s.name}</span>
+              <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+                <div style="width:${pct}%;height:100%;background:${novelCol};border-radius:3px;transition:width 1s ease;"></div>
+              </div>
+              <span style="min-width:48px;color:${novelCol};font-size:11px">${s.val} ${s.novel?'⚡':''}</span>
+            `;
+            sl.appendChild(row);
+          },idx*200);
+        });
+      }
+    }
+    if(i===4){
+      const kv=document.getElementById('iks-vis');if(kv)kv.style.display='block';
+      let pct=0;
+      const interval=setInterval(()=>{
+        pct=Math.min(100,pct+3);
+        if(ibwFill)ibwFill.style.width=pct+'%';
+        if(ibwPct)ibwPct.textContent=pct+'%';
+        if(pct>=100){
+          clearInterval(interval);
+          if(iksStatus){
+            iksStatus.textContent='✓ 122 novel tiles selected · 12.0 MB · 1.62× lift achieved';
+            iksStatus.style.color='#37B24D';
+          }
+        }
+      },40);
+    }
+
+    await sleep(i===3?1800:i===4?1600:900);
+  }
+
+  stages.forEach(id=>{const el=document.getElementById(id);if(el)el.className='ipipe-stage ipipe-done';});
+  btn.textContent='▶ RUN AGAIN';btn.disabled=false;
+  iPipeRunning=false;
+}
+
+window.jump=function(i){go(i);}
+
+// Auto-run pipeline when slide 11 (s10) becomes active
+const _origGo=window.go;
+window.go=function(n){
+  _origGo(n);
+  const activeSlide=document.querySelectorAll('.slide')[n];
+  if(activeSlide&&activeSlide.id==='s10'&&!iPipeRunning){
+    setTimeout(runIPipeline,600);
+  }
+};
+
+window.addEventListener('load',()=>{
+  // if starting on slide 11, auto-run
+  const first=document.querySelectorAll('.slide')[0];
+  if(first&&first.id==='s10')setTimeout(runIPipeline,600);
+});
+
+prog.style.width=(1/N*100)+'%';
+
+// ══════════════════════════════════════════════════
+// MISSION CONTROL DEMO SLIDE — scoped IIFE
+// ══════════════════════════════════════════════════
+(function(){
+  const ALL_CLS=[
+    {id:'seaLake',emoji:'🌊',label:'SeaLake'},{id:'forest',emoji:'🌲',label:'Forest'},
+    {id:'highway',emoji:'🛣️',label:'Highway'},{id:'industrial',emoji:'🏭',label:'Industrial'},
+    {id:'annualCrop',emoji:'🌾',label:'AnnualCrop'},{id:'river',emoji:'🏞️',label:'River'},
+    {id:'residential',emoji:'🏘️',label:'Residential'},{id:'herbaceousVeg',emoji:'🌿',label:'HerbaceousVeg'},
+    {id:'pasture',emoji:'🐄',label:'Pasture'},{id:'permanentCrop',emoji:'🍇',label:'PermanentCrop'},
+  ];
+  const PIPE_STAGES=[
+    {id:'capture',icon:'📡',name:'Tile Capture',sub:'64×64 RGB · 36 tiles',time:'0ms'},
+    {id:'encode',icon:'🧠',name:'RemoteCLIP Encode',sub:'ViT-L-14 · 768-d · cosine',time:'3,250ms/tile'},
+    {id:'ripser',icon:'🔬',name:'Ripser H₁',sub:'Persistent homology · win=80',time:'7.4ms'},
+    {id:'bottleneck',icon:'📊',name:'Bottleneck Score',sub:'Distance to archive diagram',time:'22ms'},
+    {id:'knapsack',icon:'⚖️',name:'Knapsack Scheduler',sub:'12 MB budget · rank by novelty',time:'<1ms'},
+    {id:'downlink',icon:'📶',name:'Downlink',sub:'Novel-first transmission',time:'—'},
+  ];
+  let dArchive=new Set(['seaLake','forest','highway']);
+  let dTiles=[],dTopsat=[],dRandom=[];
+  let dView='topsat',dState='idle',dCwInt=null;
+  let dCwSecs=600,dRandBW=0,dTsBW=0,dRandN=0,dTsN=0;
+  const D_BUDGET=12,D_MB=D_BUDGET/36;
+
+  const $=id=>document.getElementById(id);
+  function dShuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+  function dPool(){
+    const p=[];let id=0;
+    ALL_CLS.forEach(c=>{const isA=dArchive.has(c.id),n=isA?4:2;
+      for(let i=0;i<n;i++){const b=isA?0.0018+Math.random()*.0032:0.007+Math.random()*.0048;p.push({id:id++,cls:c.id,emoji:c.emoji,label:c.label,novel:!isA,score:parseFloat(b.toFixed(4))});}
+    });
+    while(p.length<36){const t=p[Math.floor(Math.random()*p.length)];p.push({...t,id:id++,score:parseFloat((t.score+(Math.random()-.5)*.001).toFixed(4))});}
+    return p.slice(0,36);
+  }
+
+  function dBuildArchive(){
+    const el=$('demo-archive-list');if(!el)return;el.innerHTML='';
+    ALL_CLS.forEach(c=>{
+      const d=document.createElement('div');d.className='demo-ac'+(dArchive.has(c.id)?' selected':'');
+      d.innerHTML=`<span style="font-size:16px">${c.emoji}</span><div style="flex:1"><div style="font-size:11px;font-weight:500;color:var(--text)">${c.label}</div><div style="font-size:9px;color:var(--text3);font-family:var(--mono)">${dArchive.has(c.id)?'In archive':'Not archived'}</div></div><div class="demo-ac-check"></div>`;
+      d.addEventListener('click',()=>{if(dState==='running')return;if(dArchive.has(c.id)){if(dArchive.size<=1)return;dArchive.delete(c.id);}else dArchive.add(c.id);dBuildArchive();dBuildOOD();dRebuild();});
+      el.appendChild(d);
+    });
+  }
+  function dBuildOOD(){
+    const el=$('demo-ood-pills');if(!el)return;el.innerHTML='';
+    ALL_CLS.forEach(c=>{if(!dArchive.has(c.id)){const p=document.createElement('span');p.className='demo-ood-pill';p.innerHTML=`<span style="font-size:12px">${c.emoji}</span>${c.label}`;el.appendChild(p);}});
+  }
+  function dBuildPipe(){
+    const el=$('demo-pipeline-stages');if(!el)return;el.innerHTML='';
+    PIPE_STAGES.forEach(s=>{const d=document.createElement('div');d.className='demo-ps';d.id=`demo-ps-${s.id}`;d.innerHTML=`<div class="demo-ps-icon">${s.icon}</div><div><div class="demo-ps-name">${s.name}</div><div class="demo-ps-sub">${s.sub}</div><div class="demo-ps-time">${s.time}</div></div>`;el.appendChild(d);});
+  }
+  function dRebuild(){
+    dTiles=dPool();dTopsat=[...dTiles].sort((a,b)=>b.score-a.score);dRandom=dShuffle([...dTiles]);dRenderTiles();dResetStats();
+  }
+  function dRenderTiles(){
+    const g=$('demo-tile-grid');if(!g)return;g.innerHTML='';
+    const order=dView==='topsat'?dTopsat:dRandom;
+    order.forEach((t,rank)=>{
+      const el=document.createElement('div');el.className='demo-tile dt-idle';el.id=`demo-tile-${t.id}`;
+      el.innerHTML=`<div class="demo-tile-rank">${rank+1}</div><div class="demo-tile-emoji">${t.emoji}</div><div class="demo-tile-name">${t.label}</div><div class="demo-tile-score">${t.score.toFixed(4)}</div><div class="demo-tile-tip"><div style="font-size:10px;font-weight:500;color:var(--text);margin-bottom:3px">${t.emoji} ${t.label}</div><div style="font-size:9px;font-family:var(--mono);color:var(--blue)">Score: ${t.score.toFixed(4)}</div><div style="font-size:9px;color:${t.novel?'#e07070':'#5dcaa5'};margin-top:2px">${t.novel?'⚠ Novel — OOD':'✓ Archive class'}</div></div>`;
+      g.appendChild(el);
+    });
+  }
+  function dSetTile(id,state){const el=$(`demo-tile-${id}`);if(el)el.className=`demo-tile ${state}`;}
+  function dResetStats(){
+    dRandBW=0;dTsBW=0;dRandN=0;dTsN=0;dCwSecs=600;
+    [['demo-rand-bw-used','0.0'],['demo-ts-bw-used','0.0'],['demo-rand-novel-ct','0'],['demo-ts-novel-ct','0'],['demo-cw-timer','10:00']].forEach(([id,v])=>{const e=$(id);if(e)e.textContent=v;});
+    const cwt=$('demo-cw-timer');if(cwt){cwt.style.color='var(--blue)';cwt.style.textShadow='';}
+    ['demo-rand-bw-bar','demo-ts-bw-bar'].forEach(id=>{const e=$(id);if(e)e.style.width='0%';});
+    const cf=$('demo-cw-fill');if(cf)cf.style.width='100%';
+    const lc=$('demo-lift-callout');if(lc)lc.style.opacity='0';
+    const log=$('demo-phase-log');if(log)log.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;">Select archive classes and press Run Detection to begin.</div>';
+    const lt=$('demo-log-time');if(lt)lt.textContent='—';
+    dClearCanvas();
+    PIPE_STAGES.forEach(s=>{const e=$(`demo-ps-${s.id}`);if(e)e.className='demo-ps';});
+  }
+  function dClearCanvas(){
+    const c=$('demo-dist-canvas');if(!c)return;c.width=c.offsetWidth||260;c.height=72;
+    const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='rgba(61,90,120,.5)';ctx.font='9px JetBrains Mono,monospace';ctx.fillText('Run detection to see distribution',8,40);
+  }
+  function dDrawDist(){
+    const c=$('demo-dist-canvas');if(!c)return;c.width=c.offsetWidth||260;c.height=72;
+    const ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);
+    const aS=dTiles.filter(t=>!t.novel).map(t=>t.score),nS=dTiles.filter(t=>t.novel).map(t=>t.score);
+    const all=dTiles.map(t=>t.score),minS=Math.min(...all),maxS=Math.max(...all),range=maxS-minS;
+    const BINS=20,aB=new Array(BINS).fill(0),nB=new Array(BINS).fill(0);
+    aS.forEach(s=>{const b=Math.min(BINS-1,Math.floor(((s-minS)/range)*BINS));aB[b]++;});
+    nS.forEach(s=>{const b=Math.min(BINS-1,Math.floor(((s-minS)/range)*BINS));nB[b]++;});
+    const mx=Math.max(...aB,...nB,1),bw=W/BINS,pad=7;
+    const tx=W*((0.0054-minS)/range);
+    ctx.strokeStyle='rgba(255,255,255,.12)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(tx,0);ctx.lineTo(tx,H-pad);ctx.stroke();ctx.setLineDash([]);
+    aB.forEach((cnt,i)=>{if(!cnt)return;const h=(cnt/mx)*(H-pad-3);ctx.fillStyle='rgba(55,138,221,.5)';ctx.fillRect(i*bw+1,H-pad-h,bw-2,h);});
+    nB.forEach((cnt,i)=>{if(!cnt)return;const h=(cnt/mx)*(H-pad-3);ctx.fillStyle='rgba(208,88,88,.6)';ctx.fillRect(i*bw+1,H-pad-h,bw-2,h);});
+    ctx.strokeStyle='rgba(255,255,255,.06)';ctx.beginPath();ctx.moveTo(0,H-pad);ctx.lineTo(W,H-pad);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.2)';ctx.font='8px JetBrains Mono,monospace';ctx.fillText('τ',tx+2,H-1);
+  }
+  function dLog(msg,type='active'){
+    const el=$('demo-phase-log');if(!el)return;
+    const d=document.createElement('div');d.className=`demo-log-line ${type}`;
+    const t=new Date(),ts=`${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+    d.textContent=`[${ts}] ${msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight;
+    const lt=$('demo-log-time');if(lt)lt.textContent=ts;
+  }
+  function dSetStage(sid,state){
+    PIPE_STAGES.forEach(s=>{
+      const el=$(`demo-ps-${s.id}`);if(!el)return;
+      if(s.id===sid){el.className=`demo-ps ${state}`;}
+      else if(state==='active'){const i=PIPE_STAGES.findIndex(x=>x.id===s.id),ai=PIPE_STAGES.findIndex(x=>x.id===sid);if(i<ai)el.className='demo-ps done';}
+    });
+  }
+  function dUpdateBW(){
+    const rp=Math.min(100,(dRandBW/D_BUDGET)*100),tp=Math.min(100,(dTsBW/D_BUDGET)*100);
+    if($('demo-rand-bw-used'))$('demo-rand-bw-used').textContent=dRandBW.toFixed(1);
+    if($('demo-ts-bw-used'))$('demo-ts-bw-used').textContent=dTsBW.toFixed(1);
+    if($('demo-rand-bw-bar'))$('demo-rand-bw-bar').style.width=rp+'%';
+    if($('demo-ts-bw-bar'))$('demo-ts-bw-bar').style.width=tp+'%';
+    if($('demo-rand-novel-ct'))$('demo-rand-novel-ct').textContent=dRandN;
+    if($('demo-ts-novel-ct'))$('demo-ts-novel-ct').textContent=dTsN;
+    if(dRandN>0||dTsN>0){if($('demo-lift-val'))$('demo-lift-val').textContent=dRandN>0?(dTsN/dRandN).toFixed(2)+'×':'—';if($('demo-lift-callout'))$('demo-lift-callout').style.opacity='1';}
+  }
+  function dRunSim(){
+    if(dState==='running')return;dState='running';
+    const btn=$('demo-run-btn');if(btn){btn.disabled=true;btn.style.background='rgba(208,88,88,.12)';btn.style.color='#d05858';btn.textContent='● Running...';}
+    $('demo-phase-log').innerHTML='';
+    const order=dView==='topsat'?dTopsat:dRandom;
+    order.forEach(t=>dSetTile(t.id,'dt-idle'));dDrawDist();
+    dCwInt=setInterval(()=>{
+      dCwSecs=Math.max(0,dCwSecs-1);const m=Math.floor(dCwSecs/60),s=dCwSecs%60;
+      const tEl=$('demo-cw-timer');if(tEl)tEl.textContent=`${m}:${String(s).padStart(2,'0')}`;
+      const fEl=$('demo-cw-fill');if(fEl)fEl.style.width=(dCwSecs/600*100)+'%';
+      if(dCwSecs<=120&&tEl){tEl.style.color='#d05858';tEl.style.textShadow='0 0 20px rgba(208,88,88,.4)';}
+      if(dCwSecs<=0)clearInterval(dCwInt);
+    },1000);
+    const phases=[
+      [0,()=>{dSetStage('capture','active');dLog('36 patches captured from camera module');dLog('Sentinel-2 MSI · 10m resolution · 64×64 RGB');dTiles.forEach(t=>dSetTile(t.id,t.novel?'dt-novel':'dt-archive'));}],
+      [900,()=>{dSetStage('encode','active');dLog('RemoteCLIP ViT-L-14 encoding…');dLog('768-d embeddings · cosine metric space');}],
+      [2200,()=>{dSetStage('ripser','active');dLog('Ripser H₁ persistent homology…');dLog(`Archive: ${dArchive.size} classes · ${dTiles.filter(t=>!t.novel).length} tiles`);dLog('Vietoris-Rips · window=80');}],
+      [3800,()=>{dSetStage('bottleneck','active');dLog('Bottleneck distance scoring…');dLog(`${dTiles.filter(t=>t.novel).length} tiles exceed τ=0.0054`,'warn');}],
+      [5200,()=>{
+        dSetStage('knapsack','active');dLog('Knapsack scheduler — filling 12 MB…');
+        dLog(dView==='topsat'?'TOPSAT: sorted by novelty ↓':'Random: FIFO order');
+        let step=0,bwU=0;
+        const tx=setInterval(()=>{
+          if(step>=order.length||bwU+D_MB>D_BUDGET+.001){clearInterval(tx);dFinishSim();return;}
+          const tile=order[step];bwU+=D_MB;
+          if(dView==='topsat'){
+            dTsBW=bwU;dRandBW=Math.min(D_BUDGET,bwU*(.9+Math.random()*.15));
+            const rp=bwU/D_BUDGET;dRandN=Math.round(dTiles.filter(t=>t.novel).length*rp*.58);
+            dTsN=dTiles.filter(t=>t.novel).reduce((sum,t)=>{const r=dTopsat.findIndex(x=>x.id===t.id);return sum+(r<step+1?1:0);},0);
+          }else{
+            dRandBW=bwU;dTsBW=Math.min(D_BUDGET,bwU);
+            dRandN=dTiles.filter(t=>t.novel).reduce((sum,t)=>{const r=dRandom.findIndex(x=>x.id===t.id);return sum+(r<=step?1:0);},0);
+            dTsN=dTiles.filter(t=>t.novel).reduce((sum,t)=>{const r=dTopsat.findIndex(x=>x.id===t.id);const ts=Math.round(step*(bwU/D_BUDGET));return sum+(r<ts?1:0);},0);
+          }
+          dUpdateBW();dSetTile(tile.id,tile.novel?'dt-sent-novel':'dt-sent-archive');
+          if(step+1<order.length)dSetTile(order[step+1].id,'dt-queued');step++;
+        },180);
+      }],
+    ];
+    phases.forEach(([delay,fn])=>setTimeout(fn,delay));
+  }
+  function dFinishSim(){
+    dSetStage('downlink','active');
+    setTimeout(()=>PIPE_STAGES.forEach(s=>{const e=$(`demo-ps-${s.id}`);if(e)e.className='demo-ps done';}),600);
+    const tsN=dTiles.filter(t=>t.novel).length,rN=Math.round(tsN*.58);
+    dTsN=tsN;dRandN=rN;dTsBW=D_BUDGET;dRandBW=D_BUDGET;dUpdateBW();
+    dLog('↑ Downlink complete','done');dLog(`TOPSAT: ${tsN} novel · Random: ${rN}`,'done');dLog(`Lift: ${(tsN/Math.max(rN,1)).toFixed(2)}× · BW 12.0 MB`,'done');
+    clearInterval(dCwInt);dState='done';dDrawDist();
+    const btn=$('demo-run-btn');if(btn){btn.disabled=false;btn.style.background='rgba(55,138,221,.15)';btn.style.color='var(--blue)';btn.textContent='↺  Reset & Run Again';}
+  }
+
+  document.querySelectorAll('.demo-mtbtn').forEach(b=>{
+    b.addEventListener('click',()=>{if(dState==='running')return;dView=b.dataset.mode;document.querySelectorAll('.demo-mtbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');dRenderTiles();if(dState==='done'){dState='idle';dResetStats();dRebuild();}});
+  });
+  const rb=$('demo-run-btn');if(rb)rb.addEventListener('click',()=>{if(dState==='done'){dState='idle';dResetStats();dRebuild();rb.textContent='▶ Run Detection';return;}dRunSim();});
+
+  dBuildArchive();dBuildOOD();dBuildPipe();dRebuild();dClearCanvas();
+})();
+</script>
+</body>
+</html>
