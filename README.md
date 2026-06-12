@@ -39,10 +39,10 @@ Tile → RemoteCLIP embedding → Ripser H₁ persistence diagram
 
 | Metric | Value |
 |---|---|
-| ROC-AUC | 0.731 [0.588, 0.853] |
-| Cohen's d | 0.825 (large effect, p = 3.79e-04) |
+| ROC-AUC | 0.873 [0.832, 0.909] |
+| Cohen's d | 1.529 (large effect, p = 4.63e-31) |
 | OOD tiles detected | 148/150 (98.7%) |
-| Scheduler lift | 1.5× more novel tiles at fixed 12 MB budget |
+| Scheduler lift | 1.62× more novel tiles at fixed 12 MB budget |
 | Ripser H₁ latency | 7.4 ms / window |
 | RemoteCLIP latency (CPU) | 3,250 ms / tile — current bottleneck |
 
@@ -55,7 +55,7 @@ comparison are in [`notebooks/topsat_mvp.ipynb`](notebooks/topsat_mvp.ipynb).
 topsat/
 ├── README.md
 ├── requirements.txt               # pip dependencies (Python 3.9+)
-├── presentation.html              # pitch deck (open in browser)
+├── presentation.html              # pitch deck interactive webpage (open in browser)
 ├── topsat_demo.html               # interactive mission control demo
 ├── notebooks/
 │   ├── topsat_mvp.ipynb           # main pipeline: RemoteCLIP + Ripser + knapsack
